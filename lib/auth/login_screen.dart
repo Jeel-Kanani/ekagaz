@@ -1,8 +1,67 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../folders/home_screen.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _login() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      await supabase.auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        ),
+      );
+    } on AuthException catch (e) {
+      setState(() {
+        _error = e.message;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,41 +73,45 @@ class LoginScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 40),
-
             Text(
               'Welcome Back',
               style: Theme.of(context).textTheme.headlineLarge,
             ),
-
             const SizedBox(height: 40),
-
             TextField(
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 20),
-
             TextField(
+              controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
               ),
             ),
-
             const SizedBox(height: 30),
-
+            if (_error != null) ...[
+              Text(
+                _error!,
+                style: const TextStyle(color: Colors.red),
+              ),
+              const SizedBox(height: 12),
+            ],
             ElevatedButton(
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const HomeScreen()),
-                );
-              },
-              child: const Text('Login'),
+              onPressed: _loading ? null : _login,
+              child: _loading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Login'),
             ),
           ],
         ),
