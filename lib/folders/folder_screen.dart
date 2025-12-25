@@ -1,7 +1,15 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart'; // NEW IMPORT
+import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart'; 
+import 'package:path_provider/path_provider.dart'; 
+import 'package:permission_handler/permission_handler.dart'; 
+import 'package:gal/gal.dart'; 
+import 'package:open_file/open_file.dart';
+import '../core/pdf_service.dart';
+import '../core/notification_service.dart'; // ✅ Import Notification Service
 
 class FolderScreen extends StatefulWidget {
   final String folderId;
@@ -19,12 +27,17 @@ class FolderScreen extends StatefulWidget {
 
 class _FolderScreenState extends State<FolderScreen> {
   bool _isUploading = false;
+  bool _isDownloading = false;
   List<Map<String, dynamic>> _files = [];
 
   @override
   void initState() {
     super.initState();
     _fetchFiles();
+    
+    // ✅ Initialize Notifications on load
+    NotificationService.init();
+    NotificationService.requestPermissions();
   }
 
   Future<void> _fetchFiles() async {
@@ -45,31 +58,107 @@ class _FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  // --- NEW: FUNCTION TO OPEN FILE ---
+  // --- 1. VIEW FILE ---
   Future<void> _openFile(String filePath) async {
     try {
-      // 1. Get a temporary secure link (valid for 60 seconds)
       final String publicUrl = await Supabase.instance.client
           .storage
           .from('documents')
           .createSignedUrl(filePath, 60);
 
-      // 2. Open it in the browser / PDF viewer
       final Uri url = Uri.parse(publicUrl);
       if (await canLaunchUrl(url)) {
         await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
-        throw 'Could not launch $publicUrl';
+        throw "Could not launch URL";
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open file: $e')),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open: $e')));
     }
   }
 
+  // --- 2. DOWNLOAD FILE ---
+  Future<void> _downloadFile(String filePath, String fileName) async {
+    setState(() => _isDownloading = true);
+
+    try {
+      // A. Get Download URL
+      final String downloadUrl = await Supabase.instance.client
+          .storage
+          .from('documents')
+          .createSignedUrl(filePath, 60);
+
+      // B. Check if it is an Image
+      final ext = fileName.split('.').last.toLowerCase();
+      final isImage = ['jpg', 'jpeg', 'png', 'webp', 'heic'].contains(ext);
+
+      // C. Prepare Save Logic
+      String finalSavePath = "";
+      
+      if (isImage) {
+        // --- OPTION 1: IMAGE (Save to Gallery) ---
+        final tempDir = await getTemporaryDirectory();
+        final tempPath = '${tempDir.path}/$fileName';
+        await Dio().download(downloadUrl, tempPath);
+        await Gal.putImage(tempPath);
+        finalSavePath = tempPath; // We use temp path just for the notification payload
+      } else {
+        // --- OPTION 2: DOCUMENTS ---
+        bool hasPermission = false;
+        if (Platform.isAndroid) {
+          if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) {
+            hasPermission = true;
+          } else if (await Permission.manageExternalStorage.request().isGranted || await Permission.storage.request().isGranted) {
+             hasPermission = true;
+          }
+        } else {
+          hasPermission = true;
+        }
+
+        if (!hasPermission) {
+           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Permission Denied"), backgroundColor: Colors.red));
+           return;
+        }
+
+        if (Platform.isAndroid) {
+          finalSavePath = "/storage/emulated/0/Download/$fileName";
+        } else {
+          final dir = await getApplicationDocumentsDirectory();
+          finalSavePath = "${dir.path}/$fileName";
+        }
+
+        await Dio().download(downloadUrl, finalSavePath);
+      }
+
+      // ✅ D. SHOW NOTIFICATION
+      await NotificationService.showNotification(
+        id: DateTime.now().millisecondsSinceEpoch ~/ 1000, // Unique ID
+        title: 'Download Complete',
+        body: '$fileName downloaded successfully.',
+        payload: finalSavePath, // Clicking notification opens file
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Saved: $fileName"), 
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Download failed: $e"), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isDownloading = false);
+    }
+  }
+
+  // --- 3. UPLOAD LOGIC ---
   Future<void> _uploadFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(withData: true);
     if (result == null || result.files.first.bytes == null) return;
@@ -80,7 +169,6 @@ class _FolderScreenState extends State<FolderScreen> {
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      // Sanitize filename to prevent errors with spaces/special chars
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       final String filePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName';
 
@@ -110,13 +198,63 @@ class _FolderScreenState extends State<FolderScreen> {
         );
       }
     } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  // --- 4. CONVERT TO PDF ---
+  Future<void> _convertToPdf(String filePath, String fileName) async {
+    setState(() => _isDownloading = true);
+    
+    try {
+      // A. Get Signed URL
+      final String publicUrl = await Supabase.instance.client
+          .storage
+          .from('documents')
+          .createSignedUrl(filePath, 60);
+
+      // B. Run Conversion
+      final pdfService = PdfService();
+      final uniqueName = "${fileName.split('.').first}_${DateTime.now().millisecondsSinceEpoch}.pdf";
+      
+      final savePath = await pdfService.convertImageToPdf(publicUrl, uniqueName);
+
+      if (savePath != null) {
+        
+        // ✅ C. SHOW NOTIFICATION
+        await NotificationService.showNotification(
+          id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          title: 'PDF Converted',
+          body: '$uniqueName is ready.',
+          payload: savePath,
+        );
+
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("PDF Created Successfully!"), 
+              backgroundColor: Colors.green,
+              action: SnackBarAction(
+                label: "OPEN NOW", 
+                textColor: Colors.white, 
+                onPressed: () => OpenFile.open(savePath)
+              ),
+            ),
+          );
+        }
+      } else {
+        throw "Conversion returned null";
+      }
+    } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Conversion Failed: $e"), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      setState(() => _isDownloading = false);
     }
   }
 
@@ -130,6 +268,9 @@ class _FolderScreenState extends State<FolderScreen> {
       ),
       body: Column(
         children: [
+          if (_isDownloading)
+            const LinearProgressIndicator(color: Colors.green),
+
           Expanded(
             child: _files.isEmpty
                 ? Center(
@@ -142,16 +283,49 @@ class _FolderScreenState extends State<FolderScreen> {
                       ],
                     ),
                   )
-                : ListView.builder(
+                : ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    separatorBuilder: (ctx, i) => const SizedBox(height: 10),
                     itemCount: _files.length,
                     itemBuilder: (context, index) {
                       final file = _files[index];
-                      return ListTile(
-                        leading: const Icon(Icons.description, color: Colors.blue),
-                        title: Text(file['name']),
-                        subtitle: Text(file['created_at'].toString().split('T')[0]),
-                        trailing: const Icon(Icons.visibility), // Eye icon
-                        onTap: () => _openFile(file['file_path']), // <--- CLICK TO OPEN
+                      final isImage = ['jpg','png','jpeg','webp'].contains(file['name'].split('.').last.toLowerCase());
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
+                          ],
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.blue[50],
+                            child: const Icon(Icons.description, color: Colors.blue),
+                          ),
+                          title: Text(file['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(file['created_at'].toString().split('T')[0]),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.visibility_outlined, color: Colors.grey),
+                                onPressed: () => _openFile(file['file_path']),
+                              ),
+                              if (isImage)
+                                IconButton(
+                                  icon: const Icon(Icons.picture_as_pdf, color: Colors.orange),
+                                  onPressed: () => _convertToPdf(file['file_path'], file['name']),
+                                ),
+                              IconButton(
+                                icon: const Icon(Icons.download_rounded, color: Colors.green),
+                                onPressed: () => _downloadFile(file['file_path'], file['name']),
+                              ),
+                            ],
+                          ),
+                        ),
                       );
                     },
                   ),

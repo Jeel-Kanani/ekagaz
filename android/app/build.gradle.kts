@@ -13,6 +13,8 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // ✅ CHANGE 1: Enable Core Library Desugaring
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -35,10 +37,27 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            
+            // ✅ ADD THESE LINES:
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+// ✅ CHANGE 2: Add the Desugar Dependency
+dependencies {
+    // ✅ CHANGED VERSION TO 2.1.4
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
+    // Add Google Play Core to satisfy SplitInstall / SplitCompat references used by Flutter embedding
+    implementation("com.google.android.play:core:1.10.3")
 }
