@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../family/family_service.dart';
+import '../family/family_setup_screen.dart';
 import '../folders/home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,17 +28,25 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final supabase = Supabase.instance.client;
 
+      // 1️⃣ Login user
       await supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
+      // 2️⃣ Check if user belongs to a family
+      final familyId = await FamilyService().getMyFamilyId();
+
       if (!mounted) return;
 
+      // 3️⃣ Navigate based on family status
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => const HomeScreen(),
+          builder: (_) =>
+              familyId == null
+                  ? const FamilySetupScreen()
+                  : const HomeScreen(),
         ),
       );
     } on AuthException catch (e) {
