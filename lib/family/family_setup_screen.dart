@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:famvault/family/family_service.dart';
+import '../main.dart'; // Import main to access SplashScreen
 
 class FamilySetupScreen extends StatefulWidget {
   final VoidCallback? onSuccess;
@@ -31,15 +32,24 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     super.dispose();
   }
 
+  // --- NEW HELPER FUNCTION TO NAVIGATE ---
+  void _navigateToSplash() {
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const SplashScreen()),
+    );
+  }
+
   Future<void> _checkFamily() async {
     try {
       final id = await _service.getMyFamilyId();
       if (id != null) {
-        widget.onSuccess?.call();
+        // If already in a family, go to Splash immediately
+        _navigateToSplash();
         return;
       }
     } catch (_) {
-      // ignore errors for minimal screen; fall through to show UI
+      // ignore errors
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -55,7 +65,8 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     setState(() => _loading = true);
     try {
       await _service.createFamily(name);
-      widget.onSuccess?.call();
+      // SUCCESS! Go to Splash Screen
+      _navigateToSplash();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
@@ -73,7 +84,8 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     setState(() => _loading = true);
     try {
       await _service.joinFamily(fid);
-      widget.onSuccess?.call();
+      // SUCCESS! Go to Splash Screen
+      _navigateToSplash();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
