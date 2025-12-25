@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../family/family_service.dart';
-import '../family/family_setup_screen.dart';
-import '../folders/home_screen.dart';
+import '../main.dart'; // Import main to access SplashScreen or AuthGate navigation
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,113 +12,141 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  
+  // Toggle between Login and Sign Up
+  bool _isLogin = true; 
+  bool _isLoading = false;
 
-  bool _loading = false;
-  String? _error;
+  Future<void> _authenticate() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-  Future<void> _login() async {
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter both email and password")),
+      );
+      return;
+    }
+
     setState(() {
-      _loading = true;
-      _error = null;
+      _isLoading = true;
     });
 
     try {
-      final supabase = Supabase.instance.client;
+      if (_isLogin) {
+        // --- LOGIN LOGIC ---
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+      } else {
+        // --- REGISTER LOGIC ---
+        await Supabase.instance.client.auth.signUp(
+          email: email,
+          password: password,
+        );
+        
+        // Optional: specific message for new users
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Account created! Logging you in...")),
+          );
+        }
+      }
 
-      // 1️⃣ Login user
-      await supabase.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
+      // SUCCESS: Navigate back to Splash/Main to trigger the "Family Check"
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const SplashScreen()),
+        );
+      }
 
-      // 2️⃣ Check if user belongs to a family
-      final familyId = await FamilyService().getMyFamilyId();
-
-      if (!mounted) return;
-
-      // 3️⃣ Navigate based on family status
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              familyId == null
-                  ? const FamilySetupScreen()
-                  : const HomeScreen(),
-        ),
-      );
-    } on AuthException catch (e) {
-      setState(() {
-        _error = e.message;
-      });
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
+      // FAILURE: Show error
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().contains("Invalid login") 
+              ? "Invalid email or password" 
+              : "Error: ${e.toString()}"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
-          _loading = false;
+          _isLoading = false;
         });
       }
     }
   }
 
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Login')),
+      backgroundColor: Colors.white,
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const SizedBox(height: 40),
+            // 1. Header Text
             Text(
-              'Welcome Back',
-              style: Theme.of(context).textTheme.headlineLarge,
+              _isLogin ? 'Welcome Back' : 'Create Account',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 30),
+
+            // 2. Email Field
             TextField(
               controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
                 labelText: 'Email',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.email),
               ),
+              keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 20),
+
+            // 3. Password Field
             TextField(
               controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(
                 labelText: 'Password',
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.lock),
               ),
             ),
             const SizedBox(height: 30),
-            if (_error != null) ...[
-              Text(
-                _error!,
-                style: const TextStyle(color: Colors.red),
+
+            // 4. Main Action Button
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _authenticate,
+                child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(_isLogin ? 'Login' : 'Sign Up'),
               ),
-              const SizedBox(height: 12),
-            ],
-            ElevatedButton(
-              onPressed: _loading ? null : _login,
-              child: _loading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Login'),
+            ),
+            const SizedBox(height: 20),
+
+            // 5. Toggle Button (Login <-> Register)
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _isLogin = !_isLogin;
+                });
+              },
+              child: Text(
+                _isLogin
+                    ? "Don't have an account? Register"
+                    : "Already have an account? Login",
+              ),
             ),
           ],
         ),
