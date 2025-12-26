@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../layout/main_layout.dart';
 import '../main.dart'; // Import main to access SplashScreen or AuthGate navigation
 
 class LoginScreen extends StatefulWidget {
@@ -54,10 +55,10 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
 
-      // SUCCESS: Navigate back to Splash/Main to trigger the "Family Check"
+      // SUCCESS: Navigate back to MainLayout to show the full app
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const SplashScreen()),
+          MaterialPageRoute(builder: (_) => const MainLayout()),
         );
       }
 

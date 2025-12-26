@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart'; 
 import 'package:gal/gal.dart'; 
 import 'package:open_file/open_file.dart';
+import '../core/file_viewer_screen.dart';
 import '../core/pdf_service.dart';
 import '../core/notification_service.dart'; // ✅ Import Notification Service
 
@@ -58,19 +59,29 @@ class _FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  // --- 1. VIEW FILE ---
-  Future<void> _openFile(String filePath) async {
+  // --- 1. VIEW FILE (In-App Viewer) ---
+  Future<void> _openFile(String filePath, String fileName) async {
     try {
+      // A. Get Signed URL from Supabase (Valid for 1 hour)
       final String publicUrl = await Supabase.instance.client
           .storage
           .from('documents')
-          .createSignedUrl(filePath, 60);
+          .createSignedUrl(filePath, 3600);
 
-      final Uri url = Uri.parse(publicUrl);
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        throw "Could not launch URL";
+      final fileExt = fileName.split('.').last.toLowerCase();
+
+      // B. Navigate to In-App Viewer
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FileViewerScreen(
+              fileUrl: publicUrl,
+              fileName: fileName,
+              fileType: fileExt,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open: $e')));
@@ -312,7 +323,7 @@ class _FolderScreenState extends State<FolderScreen> {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.visibility_outlined, color: Colors.grey),
-                                onPressed: () => _openFile(file['file_path']),
+                                onPressed: () => _openFile(file['file_path'], file['name']),
                               ),
                               if (isImage)
                                 IconButton(

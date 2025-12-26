@@ -13,7 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // ✅ CHANGE 1: Enable Core Library Desugaring
+        // ✅ 1. Enable Core Library Desugaring
         isCoreLibraryDesugaringEnabled = true
     }
 
@@ -24,9 +24,9 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.example.famvault"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        
+        // ✅ 2. MinSDK set to 21 (Required for PDF Viewer & Biometrics)
+        minSdk = flutter.minSdkVersion 
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -38,7 +38,7 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
             
-            // ✅ ADD THESE LINES:
+            // ✅ 3. Shrinking & Obfuscation
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -53,11 +53,10 @@ flutter {
     source = "../.."
 }
 
-// ✅ CHANGE 2: Add the Desugar Dependency
 dependencies {
-    // ✅ CHANGED VERSION TO 2.1.4
+    // ✅ 4. Desugaring (Keep this)
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 
-    // Add Google Play Core to satisfy SplitInstall / SplitCompat references used by Flutter embedding
-    implementation("com.google.android.play:core:1.10.3")
+    // ✅ 5. NEW FIX: Use 'feature-delivery' instead of the old 'play:core'
+    implementation("com.google.android.play:feature-delivery:2.1.0")
 }

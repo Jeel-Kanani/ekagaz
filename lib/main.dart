@@ -7,7 +7,8 @@ import 'core/theme/app_theme.dart';
 // --- IMPORTS FOR YOUR SCREENS ---
 import 'auth/login_screen.dart';
 import 'family/family_setup_screen.dart'; // Check this path matches your folder
-import 'folders/home_screen.dart';         // CHANGE THIS to your main Dashboard file path
+import 'layout/main_layout.dart';
+import 'core/auth_guard.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,11 +26,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final session = Supabase.instance.client.auth.currentSession;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'eKagaz',
+      title: 'FamVault',
       theme: AppTheme.lightTheme,
-      home: const SplashScreen(),
+      home: session != null
+          ? const AuthGuard(child: MainLayout())
+          : const LoginScreen(),
     );
   }
 }
@@ -79,7 +84,7 @@ class _SplashScreenState extends State<SplashScreen> {
         if (data != null) {
           // Sub-case B1: HAS Family -> Go to Main Dashboard
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const HomeScreen()), 
+            MaterialPageRoute(builder: (_) => const MainLayout()), 
           );
         } else {
           // Sub-case B2: NO Family -> Go to Create/Join Page

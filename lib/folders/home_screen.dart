@@ -5,7 +5,9 @@ import '../auth/login_screen.dart';
 import 'folder_screen.dart';
 import 'member_screen.dart';
 import '../core/scan_service.dart';
-import '../family/family_service.dart'; // Only imported once
+import '../family/family_service.dart';
+import '../family/family_setup_screen.dart';
+import '../profile/edit_profile_screen.dart'; // ✅ Import Profile Screen
 import 'dart:io';
 
 class HomeScreen extends StatefulWidget {
@@ -33,16 +35,19 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
-      // 1. Get Family Info
       final myMemberProfile = await Supabase.instance.client
           .from('family_members')
           .select('family_id, families(name)')
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
+
+      if (myMemberProfile == null) {
+        if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const FamilySetupScreen()));
+        return;
+      }
 
       final familyId = myMemberProfile['family_id'];
 
-      // 2. Get GENERAL Folders (Where owner_id is NULL)
       final generalData = await Supabase.instance.client
           .from('folders')
           .select()
@@ -50,10 +55,10 @@ class _HomeScreenState extends State<HomeScreen> {
           .filter('owner_id', 'is', null) 
           .order('created_at');
 
-      // 3. Get ALL Family Members
+      // ✅ Fetch NAME and PROFILE_URL now
       final membersData = await Supabase.instance.client
           .from('family_members')
-          .select('user_id, role, dob, phone')
+          .select('user_id, role, name, profile_url') 
           .eq('family_id', familyId);
 
       if (mounted) {
@@ -70,29 +75,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // --- HELPER: COPY ID ---
   void _copyFamilyId() {
     Clipboard.setData(ClipboardData(text: _currentFamilyId));
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Family ID Copied!"), backgroundColor: Colors.green));
   }
 
-  // --- SCANNING LOGIC ---
+  // --- SCANNING LOGIC (Kept same as before) ---
   Future<void> _handleScan() async {
     final scanService = ScanService();
     final photo = await scanService.pickImageFromCamera();
     if (photo == null) return;
-    
     final cropped = await scanService.cropImage(photo.path);
     if (cropped == null) return;
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reading text...")));
-    }
-    
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reading text...")));
     final text = await scanService.analyzeText(cropped.path);
     if (!mounted) return;
-
-    // Show Save Dialog
+    
     String fileName = "Scan_${DateTime.now().hour}_${DateTime.now().minute}";
     String? selectedFolderId;
     if (_generalFolders.isNotEmpty) selectedFolderId = _generalFolders.first['id'];
@@ -151,9 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final fileExt = file.path.split('.').last;
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       final storagePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.$fileExt';
-
       await Supabase.instance.client.storage.from('documents').upload(storagePath, file);
-
       await Supabase.instance.client.from('documents').insert({
         'name': '$fileName.$fileExt',
         'folder_id': folderId,
@@ -162,7 +158,6 @@ class _HomeScreenState extends State<HomeScreen> {
         'file_type': fileExt,
         'uploaded_by': user.id,
       });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved!"), backgroundColor: Colors.green));
         _fetchData();
@@ -199,7 +194,16 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.blue[900],
         foregroundColor: Colors.white,
         actions: [
-          // ✅ REPAIR BUTTON (Run this ONCE if folders are missing)
+           // ✅ EDIT PROFILE BUTTON
+          IconButton(
+            icon: const Icon(Icons.person_pin, color: Colors.white),
+            tooltip: "Edit Profile",
+            onPressed: () async {
+              // Wait for result, if true, refresh data
+              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+              if (result == true) _fetchData();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.build_circle, color: Colors.orange),
             tooltip: "Generate Missing Folders",
@@ -207,17 +211,9 @@ class _HomeScreenState extends State<HomeScreen> {
               final user = Supabase.instance.client.auth.currentUser;
               if (user != null) {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Generating Folders...")));
-
                 try {
-                  final memberData = await Supabase.instance.client
-                      .from('family_members')
-                      .select('family_id')
-                      .eq('user_id', user.id)
-                      .single();
-
-                  // Calls the service we updated earlier
+                  final memberData = await Supabase.instance.client.from('family_members').select('family_id').eq('user_id', user.id).single();
                   await FamilyService().createPersonalFolders(user.id, memberData['family_id']);
-
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Done! Pull to refresh.")));
                   _fetchData(); 
                 } catch (e) {
@@ -244,7 +240,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- SECTION 1: GENERAL DOCUMENTS ---
                   const Text("🏠 General Documents", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                   const SizedBox(height: 10),
                   GridView.builder(
@@ -257,10 +252,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       return _buildFolderCard(f['name'], f['icon'] ?? 'folder', f['id']);
                     },
                   ),
-
                   const SizedBox(height: 30),
-
-                  // --- SECTION 2: FAMILY MEMBERS ---
                   const Text("👨‍👩‍👧‍👦 Family Members", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                   const SizedBox(height: 10),
                   ListView.separated(
@@ -271,30 +263,29 @@ class _HomeScreenState extends State<HomeScreen> {
                     itemBuilder: (ctx, i) {
                       final member = _members[i];
                       final isMe = member['user_id'] == Supabase.instance.client.auth.currentUser!.id;
-                      final name = isMe ? "Me (My Documents)" : "Family Member ${i+1}";
                       
+                      // ✅ USE REAL NAME OR FALLBACK
+                      String displayName = member['name'] ?? "Family Member ${i+1}";
+                      if (isMe) displayName += " (Me)";
+                      
+                      final avatarUrl = member['profile_url'];
+
                       return Card(
                         elevation: 2,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         child: ListTile(
                           leading: CircleAvatar(
                             backgroundColor: isMe ? Colors.blue[100] : Colors.orange[100],
-                            child: Icon(Icons.person, color: isMe ? Colors.blue : Colors.orange),
+                            backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                            child: avatarUrl == null 
+                                ? Icon(Icons.person, color: isMe ? Colors.blue : Colors.orange) 
+                                : null,
                           ),
-                          title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text(member['role'].toString().toUpperCase()),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                           onTap: () {
-                            Navigator.push(
-                              context, 
-                              MaterialPageRoute(
-                                builder: (_) => MemberScreen(
-                                  userId: member['user_id'], 
-                                  familyId: _currentFamilyId,
-                                  isMe: isMe
-                                )
-                              )
-                            );
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => MemberScreen(userId: member['user_id'], familyId: _currentFamilyId, isMe: isMe)));
                           },
                         ),
                       );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'family_service.dart';
-import '../folders/home_screen.dart';
+import '../layout/main_layout.dart';
 
 class FamilySetupScreen extends StatefulWidget {
   const FamilySetupScreen({super.key});
@@ -22,7 +22,7 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     setState(() => _isLoading = true);
     try {
       await _familyService.createFamily(name);
-      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MainLayout()));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
@@ -37,7 +37,7 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     setState(() => _isLoading = true);
     try {
       await _familyService.joinFamily(id);
-      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const MainLayout()));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {

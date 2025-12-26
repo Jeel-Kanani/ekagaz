@@ -47,6 +47,11 @@ dependencies:
   gal: ^2.3.2
   open_file: ^3.5.10
   flutter_local_notifications: ^19.5.0
+  local_auth: 2.1.6
+  shared_preferences: ^2.5.4
+  flutter_pdfview: ^1.4.3
+  photo_view: ^0.15.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
