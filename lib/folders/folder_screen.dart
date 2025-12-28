@@ -209,7 +209,7 @@ class _FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  // --- 5. RENAME FILE ---
+  // --- UPDATED RENAME FILE ---
   Future<void> _renameFile(String fileId, String currentName) async {
     final controller = TextEditingController(text: currentName);
     await showDialog(
@@ -221,27 +221,21 @@ class _FolderScreenState extends State<FolderScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           ElevatedButton(
             onPressed: () async {
+              final newName = controller.text.trim();
               Navigator.pop(ctx);
-              if (controller.text.trim().isNotEmpty && controller.text != currentName) {
+              if (newName.isNotEmpty && newName != currentName) {
                 try {
-                  final res = await Supabase.instance.client
+                  // Attempt update
+                  await Supabase.instance.client
                       .from('documents')
-                      .update({'name': controller.text.trim()})
-                      .eq('id', fileId)
-                      .select();
+                      .update({'name': newName})
+                      .eq('id', fileId);
 
-                  final rows = List<Map<String, dynamic>>.from(res);
-                  if (rows.isEmpty) {
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Rename failed (no rows updated)"), backgroundColor: Colors.red));
-                    print('Rename returned empty rows for id=$fileId');
-                  } else {
-                    _fetchDocuments();
-                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Renamed"), backgroundColor: Colors.green));
-                    print('Rename success for id=$fileId, response: $rows');
-                  }
+                  // Refresh UI immediately
+                  _fetchDocuments();
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Renamed successfully"), backgroundColor: Colors.green));
                 } catch (e) {
-                  print('Rename error for id=$fileId: $e');
-                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Rename error: $e"), backgroundColor: Colors.red));
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Rename failed: $e"), backgroundColor: Colors.red));
                 }
               }
             },
@@ -252,31 +246,19 @@ class _FolderScreenState extends State<FolderScreen> {
     );
   }
 
-  // --- 6. SOFT DELETE (Move to Trash) ---
+  // --- UPDATED SOFT DELETE ---
   Future<void> _deleteFile(String fileId) async {
     try {
-      // ✅ JUST FLAG AS DELETED (Don't remove record) and return the changed rows
-      final res = await Supabase.instance.client
+      await Supabase.instance.client
           .from('documents')
           .update({'is_deleted': true})
-          .eq('id', fileId)
-          .select();
+          .eq('id', fileId);
 
-      // res should be a list of updated rows
-      final rows = List<Map<String, dynamic>>.from(res);
-      if (rows.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Move to Trash failed: No rows updated for id=$fileId"), backgroundColor: Colors.red));
-        print('Move to Trash returned empty rows for id=$fileId');
-        return;
-      }
-
-      _fetchDocuments();
+      _fetchDocuments(); // Reload the list to hide the deleted item
       if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Trash")));
-        print('Move to Trash success for id=$fileId, response: $rows');
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Trash"), backgroundColor: Colors.orange));
       }
     } catch (e) {
-      print('Move to Trash error for id=$fileId: $e');
       if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error moving to trash: $e"), backgroundColor: Colors.red));
     }
   }

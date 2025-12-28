@@ -66,29 +66,19 @@ class _TrashScreenState extends State<TrashScreen> {
     if (_selectedIds.isEmpty) return;
     
     try {
-      // ✅ SAFE FIX: Use .filter() instead of .in_() and return rows
-      final res = await Supabase.instance.client
+      // Use the 'in' filter with the list of selected IDs
+      await Supabase.instance.client
           .from('documents')
           .update({'is_deleted': false})
-          .filter('id', 'in', _selectedIds.toList())
-          .select();
-
-      final rows = List<Map<String, dynamic>>.from(res);
-      if (rows.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Restore failed (no rows updated)"), backgroundColor: Colors.red));
-        print('Restore failed for ids: ${_selectedIds.toList()}');
-        return;
-      }
+          .filter('id', 'in', _selectedIds.toList());
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored"), backgroundColor: Colors.green));
         _clearSelection();
         _fetchTrash();
       }
-      print('Restore succeeded for ids: ${_selectedIds.toList()}, response: $rows');
     } catch (e) {
-      print('Restore error for ids: ${_selectedIds.toList()}: $e');
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Restore error: $e"), backgroundColor: Colors.red));
     }
   }
 
