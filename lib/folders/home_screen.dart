@@ -163,17 +163,26 @@ class _HomeScreenState extends State<HomeScreen> {
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
       final storagePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.$fileExt';
       await Supabase.instance.client.storage.from('documents').upload(storagePath, file);
-      await Supabase.instance.client.from('documents').insert({
+      final inserted = await Supabase.instance.client.from('documents').insert({
         'name': '$fileName.$fileExt',
         'folder_id': folderId,
         'family_id': _currentFamilyId,
         'file_path': storagePath,
         'file_type': fileExt,
         'uploaded_by': user.id,
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved!"), backgroundColor: Colors.green));
-        _fetchData();
+      }).select();
+
+      final insertedRows = List<Map<String, dynamic>>.from(inserted);
+      if (insertedRows.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Save failed (no row returned)"), backgroundColor: Colors.red));
+        print('SaveScan failed for path: $storagePath');
+      } else {
+        final id = insertedRows.first['id'];
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Saved (id: $id)"), backgroundColor: Colors.green));
+          _fetchData();
+        }
+        print('SaveScan inserted id=$id for path: $storagePath');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));

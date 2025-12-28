@@ -38,12 +38,13 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
-  void _toggleSelection(String id) {
+  void _toggleSelection(dynamic id) {
+    final key = id.toString();
     setState(() {
-      if (_selectedIds.contains(id)) {
-        _selectedIds.remove(id);
+      if (_selectedIds.contains(key)) {
+        _selectedIds.remove(key);
       } else {
-        _selectedIds.add(id);
+        _selectedIds.add(key);
       }
       _isSelectionMode = _selectedIds.isNotEmpty;
     });
@@ -55,7 +56,7 @@ class _TrashScreenState extends State<TrashScreen> {
         _selectedIds.clear(); 
         _isSelectionMode = false;
       } else {
-        _selectedIds.addAll(_trashFiles.map((f) => f['id'] as String));
+        _selectedIds.addAll(_trashFiles.map((f) => f['id'].toString()));
         _isSelectionMode = true;
       }
     });
@@ -64,16 +65,30 @@ class _TrashScreenState extends State<TrashScreen> {
   Future<void> _restoreSelected() async {
     if (_selectedIds.isEmpty) return;
     
-    // ✅ SAFE FIX: Use .filter() instead of .in_()
-    await Supabase.instance.client
-        .from('documents')
-        .update({'is_deleted': false})
-        .filter('id', 'in', _selectedIds.toList());
+    try {
+      // ✅ SAFE FIX: Use .filter() instead of .in_() and return rows
+      final res = await Supabase.instance.client
+          .from('documents')
+          .update({'is_deleted': false})
+          .filter('id', 'in', _selectedIds.toList())
+          .select();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored")));
-      _clearSelection();
-      _fetchTrash();
+      final rows = List<Map<String, dynamic>>.from(res);
+      if (rows.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Restore failed (no rows updated)"), backgroundColor: Colors.red));
+        print('Restore failed for ids: ${_selectedIds.toList()}');
+        return;
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored")));
+        _clearSelection();
+        _fetchTrash();
+      }
+      print('Restore succeeded for ids: ${_selectedIds.toList()}, response: $rows');
+    } catch (e) {
+      print('Restore error for ids: ${_selectedIds.toList()}: $e');
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -102,16 +117,24 @@ class _TrashScreenState extends State<TrashScreen> {
         await Supabase.instance.client.storage.from('documents').remove(paths);
       }
       
-      // ✅ SAFE FIX: Use .filter() instead of .in_()
-      await Supabase.instance.client
+      // ✅ SAFE FIX: Use .filter() instead of .in_() and capture deleted rows
+      final delRes = await Supabase.instance.client
           .from('documents')
           .delete()
-          .filter('id', 'in', _selectedIds.toList());
+          .filter('id', 'in', _selectedIds.toList())
+          .select();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Permanently deleted")));
-        _clearSelection();
-        _fetchTrash();
+      final deletedRows = List<Map<String, dynamic>>.from(delRes);
+      if (deletedRows.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Delete failed (no rows deleted)"), backgroundColor: Colors.red));
+        print('Delete permanently failed for ids: ${_selectedIds.toList()}');
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Permanently deleted")));
+          _clearSelection();
+          _fetchTrash();
+        }
+        print('Delete permanently succeeded for ids: ${_selectedIds.toList()}, response: $deletedRows');
       }
     } catch (e) {
        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -157,7 +180,7 @@ class _TrashScreenState extends State<TrashScreen> {
                   itemCount: _trashFiles.length,
                   itemBuilder: (ctx, i) {
                     final file = _trashFiles[i];
-                    final isSelected = _selectedIds.contains(file['id']);
+                    final isSelected = _selectedIds.contains(file['id'].toString());
                     return ListTile(
                       tileColor: isSelected ? Colors.blue[50] : null,
                       leading: _isSelectionMode 

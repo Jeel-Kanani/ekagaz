@@ -17,15 +17,23 @@ class BiometricService {
   Future<bool> authenticate() async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'Scan fingerprint to open FamVault',
+        localizedReason: 'Please scan your fingerprint to open FamVault',
+        // We wrap options in AuthenticationOptions for newer versions
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false,
+          biometricOnly: true,
           useErrorDialogs: true,
         ),
       );
     } catch (e) {
-      return false;
+      // Fallback for older versions if the above fails
+      try {
+        return await _auth.authenticate(
+          localizedReason: 'Please scan your fingerprint',
+        );
+      } catch (e) {
+        return false;
+      }
     }
   }
 

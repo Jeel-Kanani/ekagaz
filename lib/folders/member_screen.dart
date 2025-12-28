@@ -24,18 +24,28 @@ class _MemberScreenState extends State<MemberScreen> {
   }
 
   Future<void> _fetchPersonalFolders() async {
-    final data = await Supabase.instance.client
-        .from('folders')
-        .select()
-        .eq('family_id', widget.familyId)
-        .eq('owner_id', widget.userId)
-        .order('name');
+    setState(() => _isLoading = true);
 
-    if (mounted) {
-      setState(() {
-        _personalFolders = List<Map<String, dynamic>>.from(data);
-        _isLoading = false;
-      });
+    // 1. CLEAR the list so old data doesn't stay behind
+    _personalFolders.clear();
+
+    try {
+      // 2. Fetch from Supabase
+      final data = await Supabase.instance.client
+          .from('folders')
+          .select()
+          .eq('family_id', widget.familyId) // Only folders for this family
+          .eq('owner_id', widget.userId) // Only folders owned by this user
+          .order('name', ascending: true);
+
+      if (mounted) {
+        setState(() {
+          _personalFolders = List<Map<String, dynamic>>.from(data);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

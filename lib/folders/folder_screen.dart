@@ -15,6 +15,7 @@ import '../core/pdf_service.dart';
 import '../core/share_service.dart';
 import '../core/notification_service.dart';
 import '../core/pdf_creator_service.dart'; 
+import '../debug/documents_debug_screen.dart';
 import 'trash_screen.dart';
 
 class FolderScreen extends StatefulWidget {
@@ -222,11 +223,26 @@ class _FolderScreenState extends State<FolderScreen> {
             onPressed: () async {
               Navigator.pop(ctx);
               if (controller.text.trim().isNotEmpty && controller.text != currentName) {
-                await Supabase.instance.client
-                    .from('documents')
-                    .update({'name': controller.text.trim()})
-                    .eq('id', fileId);
-                _fetchDocuments();
+                try {
+                  final res = await Supabase.instance.client
+                      .from('documents')
+                      .update({'name': controller.text.trim()})
+                      .eq('id', fileId)
+                      .select();
+
+                  final rows = List<Map<String, dynamic>>.from(res);
+                  if (rows.isEmpty) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Rename failed (no rows updated)"), backgroundColor: Colors.red));
+                    print('Rename returned empty rows for id=$fileId');
+                  } else {
+                    _fetchDocuments();
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Renamed"), backgroundColor: Colors.green));
+                    print('Rename success for id=$fileId, response: $rows');
+                  }
+                } catch (e) {
+                  print('Rename error for id=$fileId: $e');
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Rename error: $e"), backgroundColor: Colors.red));
+                }
               }
             },
             child: const Text("Rename"),
@@ -239,16 +255,29 @@ class _FolderScreenState extends State<FolderScreen> {
   // --- 6. SOFT DELETE (Move to Trash) ---
   Future<void> _deleteFile(String fileId) async {
     try {
-      // ✅ JUST FLAG AS DELETED (Don't remove record)
-      await Supabase.instance.client
+      // ✅ JUST FLAG AS DELETED (Don't remove record) and return the changed rows
+      final res = await Supabase.instance.client
           .from('documents')
           .update({'is_deleted': true})
-          .eq('id', fileId);
+          .eq('id', fileId)
+          .select();
+
+      // res should be a list of updated rows
+      final rows = List<Map<String, dynamic>>.from(res);
+      if (rows.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Move to Trash failed: No rows updated for id=$fileId"), backgroundColor: Colors.red));
+        print('Move to Trash returned empty rows for id=$fileId');
+        return;
+      }
 
       _fetchDocuments();
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Trash")));
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Moved to Trash")));
+        print('Move to Trash success for id=$fileId, response: $rows');
+      }
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error moving to trash")));
+      print('Move to Trash error for id=$fileId: $e');
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error moving to trash: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -398,7 +427,7 @@ class _FolderScreenState extends State<FolderScreen> {
       
       final folderData = await Supabase.instance.client.from('folders').select('family_id').eq('id', folderId).single();
 
-      await Supabase.instance.client.from('documents').insert({
+      final inserted = await Supabase.instance.client.from('documents').insert({
         'name': '$fileName.pdf',
         'folder_id': folderId,
         'family_id': folderData['family_id'],
@@ -406,11 +435,19 @@ class _FolderScreenState extends State<FolderScreen> {
         'file_type': 'pdf',
         'uploaded_by': user.id,
         'is_deleted': false,
-      });
+      }).select();
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Saved!"), backgroundColor: Colors.green));
-        _fetchDocuments();
+      final insertedRows = List<Map<String, dynamic>>.from(inserted);
+      if (insertedRows.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save failed (no row returned)"), backgroundColor: Colors.red));
+        print('Save PDF failed for path: $storagePath');
+      } else {
+        final id = insertedRows.first['id'];
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Saved (id: $id)"), backgroundColor: Colors.green));
+          _fetchDocuments();
+          print('Saved PDF inserted id=$id for path: $storagePath');
+        }
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
@@ -460,6 +497,12 @@ class _FolderScreenState extends State<FolderScreen> {
             icon: const Icon(Icons.auto_delete_outlined),
             tooltip: "Trash Bin",
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TrashScreen())).then((_) => _fetchDocuments()),
+          ),
+          // 🐞 Debug Documents Button (temporary)
+          IconButton(
+            icon: const Icon(Icons.bug_report),
+            tooltip: "Debug Documents",
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsDebugScreen())),
           ),
           // 📄 PDF Convert Button
           IconButton(
@@ -521,9 +564,9 @@ class _FolderScreenState extends State<FolderScreen> {
                                 onSelected: (value) {
                                   if (value == 'view') _openFile(file['file_path'], file['name']);
                                   if (value == 'share') _quickShare(file['file_path'], file['name']);
-                                  if (value == 'rename') _renameFile(file['id'], file['name']);
-                                  if (value == 'delete') _deleteFile(file['id']);
-                                  if (value == 'fav') _toggleFavorite(file['id'], file['is_favorite'] ?? false);
+                                  if (value == 'rename') _renameFile(file['id'].toString(), file['name']);
+                                  if (value == 'delete') _deleteFile(file['id'].toString());
+                                  if (value == 'fav') _toggleFavorite(file['id'].toString(), file['is_favorite'] ?? false);
                                   if (value == 'download') _downloadFile(file['file_path'], file['name']);
                                   if (value == 'pdf' && isImage) _convertToPdf(file['file_path'], file['name']);
                                 },
