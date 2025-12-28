@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 
 import 'core/constants/supabase_config.dart';
-import 'core/theme/app_theme.dart';
 import 'core/theme_service.dart';
 
 // --- IMPORTS FOR YOUR SCREENS ---
@@ -11,6 +10,7 @@ import 'auth/login_screen.dart';
 import 'family/family_setup_screen.dart'; // Check this path matches your folder
 import 'layout/main_layout.dart';
 import 'core/auth_guard.dart';
+import 'profile/profile_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,9 +21,12 @@ Future<void> main() async {
   );
 
   runApp(
-    // ✅ WRAP APP IN PROVIDER
-    ChangeNotifierProvider(
-      create: (_) => ThemeService(),
+    // ✅ WRAP APP IN MultiProvider (Theme + Profile cache)
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeService()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()..loadProfile()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -90,12 +93,16 @@ class _SplashScreenState extends State<SplashScreen> {
       // CASE B: Logged In -> Check if they have a Family
       try {
         final user = Supabase.instance.client.auth.currentUser;
-        
+        if (user == null) {
+          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+          return;
+        }
+
         // Query the database to see if this user is in the 'family_members' table
         final data = await Supabase.instance.client
             .from('family_members')
             .select()
-            .eq('user_id', user!.id)
+            .eq('user_id', user.id)
             .maybeSingle(); // Returns null if no row is found
 
         if (!mounted) return;

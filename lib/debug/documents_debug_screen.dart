@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import '../profile/profile_provider.dart';
 
 /// Temporary debug screen to inspect `documents` table rows.
-/// Open from Folder screen using the debug icon. Shows id, name, is_deleted, folder_id, file_path, uploaded_by, created_at.
+/// Open from Folder screen using the debug icon (top-right bug icon).
+/// Usage:
+///  - Type a term in the search box to filter by partial name or id, then press Search.
+///  - Press the refresh icon in the AppBar to reload the latest rows from the DB.
+///  - Tap an item to copy its id (first 8 chars shown in a SnackBar).
+///  - This screen is for diagnostics only; it uses the current authenticated user and may be affected by RLS policies.
 class DocumentsDebugScreen extends StatefulWidget {
   const DocumentsDebugScreen({super.key});
 
@@ -51,6 +58,7 @@ class _DocumentsDebugScreenState extends State<DocumentsDebugScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final profile = context.watch<ProfileProvider>();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Documents Debug'),
@@ -60,6 +68,27 @@ class _DocumentsDebugScreenState extends State<DocumentsDebugScreen> {
       ),
       body: Column(
         children: [
+          // Auth and profile quick info
+          Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Auth user: ${Supabase.instance.client.auth.currentUser?.id ?? '–'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text('Email: ${Supabase.instance.client.auth.currentUser?.email ?? '–'}'),
+                    Text('Phone: ${Supabase.instance.client.auth.currentUser?.phone ?? '–'}'),
+                    Text('Profile name: ${profile.name ?? '–'}'),
+                    Text('Avatar: ${profile.avatarUrl ?? '–'}'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           Padding(
             padding: const EdgeInsets.all(12.0),
             child: Row(

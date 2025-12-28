@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'profile_provider.dart';
 
+/// VerifyPhoneScreen
+/// - Opened by `EditProfileScreen` after a phone update.
+/// - Enter the SMS code you received and press Verify.
+/// - Use Resend to request another code; the Send uses `signInWithOtp` or equivalent on the client.
+/// NOTE: SMS delivery depends on your Supabase project's phone provider; test on a real device.
 class VerifyPhoneScreen extends StatefulWidget {
   final String phone;
   const VerifyPhoneScreen({super.key, required this.phone});
@@ -25,35 +32,46 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
 
       // 1) verifyOTP(phone: ..., token: ..., type: 'sms')
       try {
+        print('[VerifyPhone] Trying verifyOTP(phone, token)');
         await d.verifyOTP(phone: widget.phone, token: code, type: 'sms');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified')));
-        Navigator.pop(context, true);
+        print('[VerifyPhone] verifyOTP succeeded');
+        await _onVerified();
         return;
-      } catch (_) {}
+      } catch (e) {
+        print('[VerifyPhone] verifyOTP failed: $e');
+      }
 
       // 2) verifyOtp(phone: ..., token: ..., type: 'sms')
       try {
+        print('[VerifyPhone] Trying verifyOtp(phone, token)');
         await d.verifyOtp(phone: widget.phone, token: code, type: 'sms');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified')));
-        Navigator.pop(context, true);
+        print('[VerifyPhone] verifyOtp succeeded');
+        await _onVerified();
         return;
-      } catch (_) {}
+      } catch (e) {
+        print('[VerifyPhone] verifyOtp failed: $e');
+      }
 
       // 3) confirmOTP(phone: ..., token: ...)
       try {
+        print('[VerifyPhone] Trying confirmOTP(phone, token)');
         await d.confirmOTP(phone: widget.phone, token: code);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified')));
-        Navigator.pop(context, true);
+        print('[VerifyPhone] confirmOTP succeeded');
+        await _onVerified();
         return;
-      } catch (_) {}
+      } catch (e) {
+        print('[VerifyPhone] confirmOTP failed: $e');
+      }
 
       // 4) fallback: attempt verifyOTP(token: code, type: 'sms')
       try {
+        print('[VerifyPhone] Trying verifyOTP(token) fallback');
         await d.verifyOTP(token: code, type: 'sms');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified')));
-        Navigator.pop(context, true);
+        print('[VerifyPhone] verifyOTP(token) succeeded');
+        await _onVerified();
         return;
       } catch (e) {
+        print('[VerifyPhone] verifyOTP fallback failed: $e');
         throw e;
       }
     } catch (e) {
@@ -69,17 +87,24 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
     try {
       // Many Supabase clients use signInWithOtp for sending SMS codes
       try {
+        print('[VerifyPhone] Sending code via signInWithOtp(phone)');
         await auth.signInWithOtp(phone: widget.phone);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent')));
-        return;
-      } catch (_) {}
-
-      // fallback: signInWithOtp(phone: ... , options: ...)
-      try {
-        await auth.signInWithOtp(phone: widget.phone, options: {'shouldCreateUser': false});
+        print('[VerifyPhone] signInWithOtp sent');
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent')));
         return;
       } catch (e) {
+        print('[VerifyPhone] signInWithOtp failed: $e');
+      }
+
+      // fallback: signInWithOtp(phone: ... , options: ...)
+      try {
+        print('[VerifyPhone] Sending code via signInWithOtp(phone, options)');
+        await auth.signInWithOtp(phone: widget.phone, options: {'shouldCreateUser': false});
+        print('[VerifyPhone] signInWithOtp(options) sent');
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent')));
+        return;
+      } catch (e) {
+        print('[VerifyPhone] signInWithOtp(options) failed: $e');
         throw e;
       }
     } catch (e) {
@@ -87,6 +112,18 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _onVerified() async {
+    // refresh user profile and provider state
+    try {
+      await Supabase.instance.client.auth.getUser();
+    } catch (_) {}
+    try {
+      if (mounted) await context.read<ProfileProvider>().loadProfile();
+    } catch (_) {}
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified'), backgroundColor: Colors.green));
+    if (mounted) Navigator.pop(context, true);
   }
 
   @override

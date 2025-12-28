@@ -7,7 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart'; 
 import 'package:gal/gal.dart'; 
 import 'package:open_file/open_file.dart';
-import 'package:image_picker/image_picker.dart'; // Needed for PDF Creator
+
+// ✅ Custom Imports
 
 // ✅ Custom Imports
 import '../core/file_viewer_screen.dart';
@@ -67,6 +68,16 @@ class _FolderScreenState extends State<FolderScreen> {
       // IMPORTANT: You CANNOT call .eq() after .order()
       builder = builder.eq('is_deleted', false); 
       builder = builder.eq('folder_id', widget.folderId);
+
+      // Optional: apply search filter
+      if (_searchQuery.trim().isNotEmpty) {
+        final q = _searchQuery.trim();
+        try {
+          builder = builder.or('name.ilike.%$q%,file_name.ilike.%$q%');
+        } catch (_) {
+          // If the builder doesn't support .or or the format, ignore search
+        }
+      }
       
       // 3. ✅ APPLY SORT LAST
       final data = await builder.order('created_at', ascending: false);
@@ -274,8 +285,13 @@ class _FolderScreenState extends State<FolderScreen> {
 
     try {
       final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not authenticated'), backgroundColor: Colors.red));
+        return;
+      }
+
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final String filePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName';
+      final String filePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName';
 
       await Supabase.instance.client.storage
           .from('documents')
@@ -402,8 +418,14 @@ class _FolderScreenState extends State<FolderScreen> {
     setState(() => _isUploading = true);
     try {
       final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not authenticated'), backgroundColor: Colors.red));
+        if (mounted) setState(() => _isUploading = false);
+        return;
+      }
+
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final storagePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.pdf';
+      final storagePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.pdf';
       
       await Supabase.instance.client.storage.from('documents').upload(storagePath, file);
       
@@ -481,6 +503,7 @@ class _FolderScreenState extends State<FolderScreen> {
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TrashScreen())).then((_) => _fetchDocuments()),
           ),
           // 🐞 Debug Documents Button (temporary)
+          // Opens `DocumentsDebugScreen` — use it to inspect `documents` rows (search + refresh accessible there).
           IconButton(
             icon: const Icon(Icons.bug_report),
             tooltip: "Debug Documents",

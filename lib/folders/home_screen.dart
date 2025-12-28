@@ -159,9 +159,15 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _isLoading = true);
     try {
       final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not authenticated'), backgroundColor: Colors.red));
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
       final fileExt = file.path.split('.').last;
       final cleanName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final storagePath = '${user!.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.$fileExt';
+      final storagePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}_$cleanName.$fileExt';
       await Supabase.instance.client.storage.from('documents').upload(storagePath, file);
       final inserted = await Supabase.instance.client.from('documents').insert({
         'name': '$fileName.$fileExt',
@@ -284,7 +290,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, i) {
                       final member = _members[i];
-                      final isMe = member['user_id'] == Supabase.instance.client.auth.currentUser!.id;
+                      final isMe = member['user_id'] == Supabase.instance.client.auth.currentUser?.id;
                       
                       // ✅ USE REAL NAME OR FALLBACK
                       String displayName = member['name'] ?? "Family Member ${i+1}";
