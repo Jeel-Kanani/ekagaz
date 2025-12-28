@@ -1,24 +1,20 @@
+import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_file/open_file.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
-  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
+  static final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
 
-  // 1. Initialize the plugin
   static Future<void> init() async {
-    // Android Setup
-    const AndroidInitializationSettings androidSettings =
-        AndroidInitializationSettings('@mipmap/ic_launcher'); // Uses your app icon
+    const AndroidInitializationSettings androidSettings = 
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    // General Setup
-    const InitializationSettings settings =
-        InitializationSettings(android: androidSettings);
+    const InitializationSettings settings = InitializationSettings(android: androidSettings);
 
-    await _notificationsPlugin.initialize(
+    await _notifications.initialize(
       settings,
-      onDidReceiveNotificationResponse: (response) {
-        // When user taps the notification, open the file
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
         if (response.payload != null) {
           OpenFile.open(response.payload);
         }
@@ -26,34 +22,39 @@ class NotificationService {
     );
   }
 
-  // 2. Request Permissions (Android 13+)
   static Future<void> requestPermissions() async {
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    if (Platform.isAndroid) {
+      // ✅ FIX: Use simple permission handler for Android 13+
+      await Permission.notification.request();
+      
+      // Also init the specific android plugin implementation
+      final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+          _notifications.resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+              
+      if (androidImplementation != null) {
+        await androidImplementation.requestNotificationsPermission();
+      }
+    }
   }
 
-  // 3. Show the Notification
   static Future<void> showNotification({
     required int id,
     required String title,
     required String body,
-    String? payload, // The file path (so we can open it on tap)
+    String? payload,
   }) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'downloads_channel', // Channel ID
-      'Downloads', // Channel Name
+      'downloads_channel',
+      'Downloads',
       channelDescription: 'Notifications for downloaded files',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
-      icon: '@mipmap/ic_launcher',
     );
 
-    const NotificationDetails details =
-        NotificationDetails(android: androidDetails);
+    const NotificationDetails details = NotificationDetails(android: androidDetails);
 
-    await _notificationsPlugin.show(id, title, body, details, payload: payload);
+    await _notifications.show(id, title, body, details, payload: payload);
   }
 }

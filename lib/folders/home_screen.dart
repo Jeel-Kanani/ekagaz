@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../auth/login_screen.dart';
 import 'folder_screen.dart';
 import 'member_screen.dart';
-import '../core/scan_service.dart';
+import '../core/smart_scanner_service.dart'; // Replaced old scan service with SmartScannerService
 import '../family/family_service.dart';
 import '../family/family_setup_screen.dart';
 import '../profile/edit_profile_screen.dart'; // ✅ Import Profile Screen
@@ -80,17 +80,27 @@ class _HomeScreenState extends State<HomeScreen> {
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Family ID Copied!"), backgroundColor: Colors.green));
   }
 
-  // --- SCANNING LOGIC (Kept same as before) ---
+  // --- SCANNING LOGIC (Upgraded to Smart Scanner) ---
   Future<void> _handleScan() async {
-    final scanService = ScanService();
-    final photo = await scanService.pickImageFromCamera();
-    if (photo == null) return;
-    final cropped = await scanService.cropImage(photo.path);
-    if (cropped == null) return;
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Reading text...")));
-    final text = await scanService.analyzeText(cropped.path);
-    if (!mounted) return;
-    
+    // A. Start the Smart Scanner (Camera + Gallery + Filters + Multi-page PDF)
+    final scanner = SmartScannerService();
+    final result = await scanner.scanDocument();
+
+    if (result == null || result.pdf == null) return; // User cancelled or no PDF returned
+
+    // B. Get the scanned PDF file path
+    final scannedPdf = File(result.pdf!.uri);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Processing Scan...")));
+    }
+
+    // C. Show Save Dialog and reuse existing save logic (now handles PDF files)
+    await _showSaveDialog(scannedPdf);
+  }
+
+  // Show dialog specialized for saving scanned PDFs
+  Future<void> _showSaveDialog(File file) async {
     String fileName = "Scan_${DateTime.now().hour}_${DateTime.now().minute}";
     String? selectedFolderId;
     if (_generalFolders.isNotEmpty) selectedFolderId = _generalFolders.first['id'];
@@ -101,12 +111,14 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: const Text("Save General Document"),
+            title: const Text("Save Document"),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   Image.file(File(cropped.path), height: 150),
+                   const Icon(Icons.picture_as_pdf, size: 60, color: Colors.red),
+                   const SizedBox(height: 10),
+                   Text("${(file.lengthSync() / 1024).toStringAsFixed(1)} KB", style: const TextStyle(color: Colors.grey)),
                    const SizedBox(height: 10),
                    TextFormField(
                     initialValue: fileName,
@@ -130,7 +142,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () {
                   if (fileName.isNotEmpty && selectedFolderId != null) {
                     Navigator.pop(ctx);
-                    _saveScan(File(cropped.path), fileName, selectedFolderId!);
+                    // Pass the file, name, and folder ID to your save function (PDF file)
+                    _saveScan(file, fileName, selectedFolderId!);
                   }
                 },
                 child: const Text("Save"),

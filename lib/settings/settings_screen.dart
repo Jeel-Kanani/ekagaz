@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
+import 'premium_screen.dart';
+import '../core/theme_service.dart';
 import '../profile/edit_profile_screen.dart';
 import '../core/biometric_service.dart'; // ✅ Import Service
 
@@ -57,6 +60,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         children: [
           const SizedBox(height: 20),
+
+          // GO PRO BANNER
+          ListTile(
+            tileColor: Colors.amber[100],
+            leading: const Icon(Icons.workspace_premium, color: Colors.amber),
+            title: const Text("Upgrade to PRO", style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: const Text("Remove ads & unlock features"),
+            trailing: const Icon(Icons.arrow_forward, color: Colors.amber),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PremiumScreen())),
+          ),
+
+          const SizedBox(height: 10),
+
           ListTile(
             leading: const CircleAvatar(child: Icon(Icons.person)),
             title: Text(user?.email ?? "User"),
@@ -75,6 +91,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               value: _isLockEnabled, 
               activeColor: Colors.purple,
               onChanged: _toggleLock
+            ),
+          ),
+
+          // DARK MODE SWITCH
+          ListTile(
+            leading: const Icon(Icons.dark_mode, color: Colors.indigo),
+            title: const Text("Dark Mode"),
+            trailing: Switch(
+              value: context.watch<ThemeService>().isDarkMode,
+              onChanged: (val) => context.read<ThemeService>().toggleTheme(val),
             ),
           ),
           

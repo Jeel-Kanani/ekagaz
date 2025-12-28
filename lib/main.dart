@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
 import 'core/constants/supabase_config.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme_service.dart';
 
 // --- IMPORTS FOR YOUR SCREENS ---
 import 'auth/login_screen.dart';
@@ -18,7 +20,13 @@ Future<void> main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  runApp(const MyApp());
+  runApp(
+    // ✅ WRAP APP IN PROVIDER
+    ChangeNotifierProvider(
+      create: (_) => ThemeService(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -28,12 +36,23 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = Supabase.instance.client.auth.currentSession;
 
+    final themeService = context.watch<ThemeService>(); // ✅ Listen to theme changes
+
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
       title: 'FamVault',
-      theme: AppTheme.lightTheme,
-      home: session != null
-          ? const AuthGuard(child: MainLayout())
+      debugShowCheckedModeBanner: false,
+      // ✅ DYNAMIC THEME
+      themeMode: themeService.isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+        scaffoldBackgroundColor: Colors.grey[50],
+      ),
+      darkTheme: ThemeData.dark().copyWith(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+      ),
+      home: session != null 
+          ? const AuthGuard(child: MainLayout()) 
           : const LoginScreen(),
     );
   }

@@ -59,4 +59,7 @@ dependencies {
 
     // ✅ 5. NEW FIX: Use 'feature-delivery' instead of the old 'play:core'
     implementation("com.google.android.play:feature-delivery:2.1.0")
+
+    // ✅ REQUIRED for ML Kit Document Scanner
+    implementation("com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1")
 }

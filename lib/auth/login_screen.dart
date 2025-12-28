@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../layout/main_layout.dart';
-import '../main.dart'; // Import main to access SplashScreen or AuthGate navigation
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

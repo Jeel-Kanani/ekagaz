@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,9 +11,9 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
-  File? _imageFile;
+  final _phoneController = TextEditingController();
   bool _isLoading = false;
-  String? _currentAvatarUrl;
+  String? _avatarUrl; // ✅ Explicitly typed as String?
 
   @override
   void initState() {
@@ -24,65 +23,80 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _loadProfile() async {
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    final data = await Supabase.instance.client
-        .from('family_members')
-        .select('name, profile_url')
-        .eq('user_id', user.id)
-        .single();
-
-    setState(() {
-      _nameController.text = data['name'] ?? '';
-      _currentAvatarUrl = data['profile_url'];
-    });
-  }
-
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => _imageFile = File(picked.path));
+    if (user != null) {
+      final data = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      
+      if (data != null) {
+        setState(() {
+          _nameController.text = data['full_name'] ?? '';
+          _phoneController.text = data['phone'] ?? '';
+          _avatarUrl = data['avatar_url'] as String?; // ✅ Safe cast
+        });
+      }
     }
   }
 
-  Future<void> _saveProfile() async {
+  Future<void> _uploadAvatar() async {
+    final picker = ImagePicker();
+    final imageFile = await picker.pickImage(source: ImageSource.gallery, maxWidth: 600);
+    
+    if (imageFile == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      final bytes = await imageFile.readAsBytes();
+      final fileExt = imageFile.path.split('.').last;
+      final fileName = '${user!.id}/avatar.$fileExt';
+
+      await Supabase.instance.client.storage
+          .from('avatars')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+
+      final imageUrl = Supabase.instance.client.storage
+          .from('avatars')
+          .getPublicUrl(fileName);
+
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user.id,
+        'avatar_url': imageUrl
+      });
+
+      setState(() {
+        _avatarUrl = imageUrl;
+        _isLoading = false;
+      });
+      
+    } catch (e) {
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateProfile() async {
     setState(() => _isLoading = true);
     final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
+    
     try {
-      String? avatarPath = _currentAvatarUrl;
-
-      // 1. Upload Image if changed
-      if (_imageFile != null) {
-        final fileExt = _imageFile!.path.split('.').last;
-        final fileName = '${user.id}_profile.${DateTime.now().millisecondsSinceEpoch}.$fileExt';
-        
-        await Supabase.instance.client.storage
-            .from('documents') // Reusing documents bucket, or create a 'avatars' bucket
-            .upload(fileName, _imageFile!);
-            
-        avatarPath = await Supabase.instance.client.storage
-            .from('documents')
-            .createSignedUrl(fileName, 60 * 60 * 24 * 365); // 1 Year valid URL (Simple fix)
-      }
-
-      // 2. Update Database
-      await Supabase.instance.client.from('family_members').update({
-        'name': _nameController.text.trim(),
-        'profile_url': avatarPath,
-      }).eq('user_id', user.id);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile Updated!")));
-        Navigator.pop(context, true); // Return 'true' to trigger refresh
-      }
+      await Supabase.instance.client.from('profiles').upsert({
+        'id': user!.id,
+        'full_name': _nameController.text,
+        'phone': _phoneController.text,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile Updated!")));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     }
+    setState(() => _isLoading = false);
   }
 
   @override
@@ -94,35 +108,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           children: [
             GestureDetector(
-              onTap: _pickImage,
+              onTap: _uploadAvatar,
               child: CircleAvatar(
                 radius: 50,
-                backgroundColor: Colors.grey[200],
-                backgroundImage: _imageFile != null 
-                    ? FileImage(_imageFile!) 
-                    : (_currentAvatarUrl != null ? NetworkImage(_currentAvatarUrl!) : null) as ImageProvider?,
-                child: (_imageFile == null && _currentAvatarUrl == null)
-                    ? const Icon(Icons.camera_alt, size: 40, color: Colors.grey)
+                backgroundColor: Colors.grey[300],
+                // ✅ FIX: Correctly check for null and wrap in NetworkImage
+                backgroundImage: _avatarUrl != null 
+                    ? NetworkImage(_avatarUrl!) 
                     : null,
+                child: _avatarUrl == null 
+                  ? (_isLoading ? const CircularProgressIndicator() : const Icon(Icons.camera_alt, size: 40, color: Colors.grey))
+                  : null,
               ),
             ),
             const SizedBox(height: 10),
-            const Text("Tap to change photo"),
+            const Text("Tap to change photo", style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 30),
+
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: "Full Name",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
-              ),
+              decoration: const InputDecoration(labelText: "Full Name", border: OutlineInputBorder()),
             ),
             const SizedBox(height: 20),
+            TextField(
+              controller: _phoneController,
+              decoration: const InputDecoration(labelText: "Phone Number", border: OutlineInputBorder()),
+              keyboardType: TextInputType.phone,
+            ),
+            const SizedBox(height: 30),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _isLoading ? null : _saveProfile,
+                onPressed: _isLoading ? null : _updateProfile,
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
                 child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes"),
               ),
