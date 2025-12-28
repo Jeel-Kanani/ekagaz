@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
+import 'verify_phone_screen.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -14,6 +15,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _avatarUrl; // ✅ Explicitly typed as String?
+  String? _initialPhone; // store initial phone to detect changes
 
   @override
   void initState() {
@@ -35,6 +37,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _nameController.text = data['full_name'] ?? '';
           _phoneController.text = data['phone'] ?? '';
           _avatarUrl = data['avatar_url'] as String?; // ✅ Safe cast
+          _initialPhone = (data['phone'] as String?) ?? user.phone; // fallback to auth phone
+        });
+      } else {
+        // If no profile row, still set initial phone from auth
+        setState(() {
+          _initialPhone = user.phone;
         });
       }
     }
@@ -83,20 +91,45 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _updateProfile() async {
     setState(() => _isLoading = true);
-    final user = Supabase.instance.client.auth.currentUser;
-    
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+
     try {
-      await Supabase.instance.client.from('profiles').upsert({
+      // 1) Update Auth metadata (name) and phone via updateUser
+      try {
+        await client.auth.updateUser(
+          UserAttributes(
+            data: {'full_name': _nameController.text},
+            phone: _phoneController.text.isNotEmpty ? _phoneController.text : null,
+          ),
+        );
+      } catch (authErr) {
+        // show a helpful message but continue to upsert profile row
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Auth update: $authErr'), backgroundColor: Colors.orange));
+      }
+
+      // 2) Upsert profiles table with canonical data for searching etc.
+      await client.from('profiles').upsert({
         'id': user!.id,
         'full_name': _nameController.text,
         'phone': _phoneController.text,
+        'avatar_url': _avatarUrl,
         'updated_at': DateTime.now().toIso8601String(),
       });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile Updated!")));
+
+      // 3) Notify about phone verification if phone changed
+      if (_phoneController.text.isNotEmpty && _phoneController.text != (_initialPhone ?? '')) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated. Phone change requires OTP verification; check your SMS.'), backgroundColor: Colors.orange));
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated!'), backgroundColor: Colors.green));
+      }
     } catch (e) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+    } finally {
+      setState(() => _isLoading = false);
+      // refresh initialPhone to current phone
+      _initialPhone = _phoneController.text;
     }
-    setState(() => _isLoading = false);
   }
 
   @override
@@ -144,7 +177,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
                 child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes"),
               ),
-            )
+            ),
+            if (_phoneController.text.isNotEmpty && _phoneController.text != (_initialPhone ?? ''))
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      // Open OTP screen
+                      final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyPhoneScreen(phone: _phoneController.text)));
+                      if (res == true) {
+                        // refresh profile/metadata
+                        await _loadProfile();
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified and updated'), backgroundColor: Colors.green));
+                      }
+                    },
+                    child: const Text('Verify Phone'),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
