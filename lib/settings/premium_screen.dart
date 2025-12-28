@@ -24,11 +24,15 @@ class PremiumScreen extends StatelessWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.workspace_premium, size: 80, color: Colors.amber),
+                const Icon(Icons.workspace_premium,
+                    size: 80, color: Colors.amber),
                 const SizedBox(height: 20),
                 const Text(
                   "Upgrade to FamVault PRO",
-                  style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
@@ -45,20 +49,26 @@ class PremiumScreen extends StatelessWidget {
                 const SizedBox(height: 40),
                 ElevatedButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Payment Gateway Coming Soon!")));
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text("Payment Gateway Coming Soon!")));
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.amber,
                     foregroundColor: Colors.black,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 15),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(30)),
                   ),
-                  child: const Text("Get PRO - ₹99/Year", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  child: const Text("Get PRO - ₹99/Year",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 ),
                 const SizedBox(height: 15),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("No thanks, I'll keep ads", style: TextStyle(color: Colors.white54)),
+                  child: const Text("No thanks, I'll keep ads",
+                      style: TextStyle(color: Colors.white54)),
                 )
               ],
             ),

@@ -50,10 +50,12 @@ class ScanService {
   Future<String> analyzeText(String imagePath) async {
     try {
       final inputImage = InputImage.fromFilePath(imagePath);
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      
+      final textRecognizer =
+          TextRecognizer(script: TextRecognitionScript.latin);
+
+      final RecognizedText recognizedText =
+          await textRecognizer.processImage(inputImage);
+
       await textRecognizer.close();
       return recognizedText.text; // Returns all the text found on the document
     } catch (e) {

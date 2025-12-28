@@ -52,17 +52,21 @@ class _AuthGuardState extends State<AuthGuard> {
             children: [
               const Icon(Icons.lock, size: 80, color: Colors.white),
               const SizedBox(height: 20),
-              const Text("FamVault Locked", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              const Text("FamVault Locked",
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold)),
               const SizedBox(height: 30),
               ElevatedButton.icon(
                 onPressed: _authenticate,
                 icon: const Icon(Icons.fingerprint),
                 label: const Text("Unlock with Biometrics"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white, 
-                  foregroundColor: Colors.blue[900],
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15)
-                ),
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.blue[900],
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 30, vertical: 15)),
               )
             ],
           ),

@@ -4,7 +4,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 
 class SmartScannerService {
-  
   // 1. Start the Pro Scanner UI
   Future<DocumentScanningResult?> scanDocument() async {
     try {
@@ -39,7 +38,8 @@ class SmartScannerService {
     }
 
     final outputDir = await getTemporaryDirectory();
-    final file = File("${outputDir.path}/scan_${DateTime.now().millisecondsSinceEpoch}.pdf");
+    final file = File(
+        "${outputDir.path}/scan_${DateTime.now().millisecondsSinceEpoch}.pdf");
     await file.writeAsBytes(await pdf.save());
     return file;
   }

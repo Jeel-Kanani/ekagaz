@@ -39,7 +39,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = Supabase.instance.client.auth.currentSession;
 
-    final themeService = context.watch<ThemeService>(); // ✅ Listen to theme changes
+    final themeService =
+        context.watch<ThemeService>(); // ✅ Listen to theme changes
 
     return MaterialApp(
       title: 'FamVault',
@@ -52,10 +53,11 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.grey[50],
       ),
       darkTheme: ThemeData.dark().copyWith(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+        colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue, brightness: Brightness.dark),
       ),
-      home: session != null 
-          ? const AuthGuard(child: MainLayout()) 
+      home: session != null
+          ? const AuthGuard(child: MainLayout())
           : const LoginScreen(),
     );
   }
@@ -94,7 +96,8 @@ class _SplashScreenState extends State<SplashScreen> {
       try {
         final user = Supabase.instance.client.auth.currentUser;
         if (user == null) {
-          Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginScreen()));
+          Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const LoginScreen()));
           return;
         }
 
@@ -110,7 +113,7 @@ class _SplashScreenState extends State<SplashScreen> {
         if (data != null) {
           // Sub-case B1: HAS Family -> Go to Main Dashboard
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const MainLayout()), 
+            MaterialPageRoute(builder: (_) => const MainLayout()),
           );
         } else {
           // Sub-case B2: NO Family -> Go to Create/Join Page
@@ -141,9 +144,9 @@ class _SplashScreenState extends State<SplashScreen> {
             Text(
               'eKagaz',
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.blue, // Or your app color
-              ),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue, // Or your app color
+                  ),
             ),
             const SizedBox(height: 20),
             const CircularProgressIndicator(), // Loading spinner

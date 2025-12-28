@@ -29,7 +29,8 @@ class PdfCreatorService {
 
     // 3. Save PDF
     final outputDir = await getTemporaryDirectory();
-    final file = File("${outputDir.path}/Converted_Doc_${DateTime.now().millisecondsSinceEpoch}.pdf");
+    final file = File(
+        "${outputDir.path}/Converted_Doc_${DateTime.now().millisecondsSinceEpoch}.pdf");
     await file.writeAsBytes(await pdf.save());
     return file;
   }

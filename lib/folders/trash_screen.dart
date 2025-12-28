@@ -10,7 +10,7 @@ class TrashScreen extends StatefulWidget {
 
 class _TrashScreenState extends State<TrashScreen> {
   List<Map<String, dynamic>> _trashFiles = [];
-  final Set<String> _selectedIds = {}; 
+  final Set<String> _selectedIds = {};
   bool _isLoading = true;
   bool _isSelectionMode = false;
 
@@ -22,12 +22,12 @@ class _TrashScreenState extends State<TrashScreen> {
 
   Future<void> _fetchTrash() async {
     setState(() => _isLoading = true);
-    
+
     // ✅ CORRECT ORDER: Filter (.eq) -> Sort (.order)
     final data = await Supabase.instance.client
         .from('documents')
         .select()
-        .eq('is_deleted', true) 
+        .eq('is_deleted', true)
         .order('created_at', ascending: false);
 
     if (mounted) {
@@ -53,7 +53,7 @@ class _TrashScreenState extends State<TrashScreen> {
   void _selectAll() {
     setState(() {
       if (_selectedIds.length == _trashFiles.length) {
-        _selectedIds.clear(); 
+        _selectedIds.clear();
         _isSelectionMode = false;
       } else {
         _selectedIds.addAll(_trashFiles.map((f) => f['id'].toString()));
@@ -64,21 +64,23 @@ class _TrashScreenState extends State<TrashScreen> {
 
   Future<void> _restoreSelected() async {
     if (_selectedIds.isEmpty) return;
-    
+
     try {
       // Use the 'in' filter with the list of selected IDs
-      await Supabase.instance.client
-          .from('documents')
-          .update({'is_deleted': false})
-          .filter('id', 'in', _selectedIds.toList());
+      await Supabase.instance.client.from('documents').update(
+          {'is_deleted': false}).filter('id', 'in', _selectedIds.toList());
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored"), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("${_selectedIds.length} files restored"),
+            backgroundColor: Colors.green));
         _clearSelection();
         _fetchTrash();
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Restore error: $e"), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text("Restore error: $e"), backgroundColor: Colors.red));
     }
   }
 
@@ -91,22 +93,27 @@ class _TrashScreenState extends State<TrashScreen> {
         title: const Text("Delete Forever?"),
         content: const Text("This cannot be undone."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text("Cancel")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text("Delete", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
 
     if (confirm != true) return;
 
-    final filesToDelete = _trashFiles.where((f) => _selectedIds.contains(f['id'])).toList();
+    final filesToDelete =
+        _trashFiles.where((f) => _selectedIds.contains(f['id'])).toList();
     final paths = filesToDelete.map((f) => f['file_path'] as String).toList();
 
     try {
       if (paths.isNotEmpty) {
         await Supabase.instance.client.storage.from('documents').remove(paths);
       }
-      
+
       // ✅ SAFE FIX: Use .filter() instead of .in_() and capture deleted rows
       final delRes = await Supabase.instance.client
           .from('documents')
@@ -116,18 +123,25 @@ class _TrashScreenState extends State<TrashScreen> {
 
       final deletedRows = List<Map<String, dynamic>>.from(delRes);
       if (deletedRows.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Delete failed (no rows deleted)"), backgroundColor: Colors.red));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text("Delete failed (no rows deleted)"),
+              backgroundColor: Colors.red));
         print('Delete permanently failed for ids: ${_selectedIds.toList()}');
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Permanently deleted")));
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Permanently deleted")));
           _clearSelection();
           _fetchTrash();
         }
-        print('Delete permanently succeeded for ids: ${_selectedIds.toList()}, response: $deletedRows');
+        print(
+            'Delete permanently succeeded for ids: ${_selectedIds.toList()}, response: $deletedRows');
       }
     } catch (e) {
-       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
     }
   }
 
@@ -150,38 +164,55 @@ class _TrashScreenState extends State<TrashScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_isSelectionMode ? "${_selectedIds.length} Selected" : "Trash Bin"),
-          backgroundColor: _isSelectionMode ? Colors.grey[800] : Colors.red[900],
+          title: Text(_isSelectionMode
+              ? "${_selectedIds.length} Selected"
+              : "Trash Bin"),
+          backgroundColor:
+              _isSelectionMode ? Colors.grey[800] : Colors.red[900],
           foregroundColor: Colors.white,
-          leading: _isSelectionMode ? IconButton(icon: const Icon(Icons.close), onPressed: _clearSelection) : null,
+          leading: _isSelectionMode
+              ? IconButton(
+                  icon: const Icon(Icons.close), onPressed: _clearSelection)
+              : null,
           actions: [
             if (_isSelectionMode) ...[
-              IconButton(icon: const Icon(Icons.restore), onPressed: _restoreSelected),
-              IconButton(icon: const Icon(Icons.delete_forever), onPressed: _deleteSelectedPermanently),
-              IconButton(icon: const Icon(Icons.select_all), onPressed: _selectAll),
+              IconButton(
+                  icon: const Icon(Icons.restore), onPressed: _restoreSelected),
+              IconButton(
+                  icon: const Icon(Icons.delete_forever),
+                  onPressed: _deleteSelectedPermanently),
+              IconButton(
+                  icon: const Icon(Icons.select_all), onPressed: _selectAll),
             ]
           ],
         ),
-        body: _isLoading 
-          ? const Center(child: CircularProgressIndicator()) 
-          : _trashFiles.isEmpty 
-              ? const Center(child: Text("Trash is empty"))
-              : ListView.builder(
-                  itemCount: _trashFiles.length,
-                  itemBuilder: (ctx, i) {
-                    final file = _trashFiles[i];
-                    final isSelected = _selectedIds.contains(file['id'].toString());
-                    return ListTile(
-                      tileColor: isSelected ? Colors.blue[50] : null,
-                      leading: _isSelectionMode 
-                        ? Checkbox(value: isSelected, onChanged: (_) => _toggleSelection(file['id']))
-                        : const Icon(Icons.delete_outline),
-                      title: Text(file['name'], style: const TextStyle(decoration: TextDecoration.lineThrough)),
-                      onLongPress: () => _toggleSelection(file['id']),
-                      onTap: () => _isSelectionMode ? _toggleSelection(file['id']) : null,
-                    );
-                  },
-                ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _trashFiles.isEmpty
+                ? const Center(child: Text("Trash is empty"))
+                : ListView.builder(
+                    itemCount: _trashFiles.length,
+                    itemBuilder: (ctx, i) {
+                      final file = _trashFiles[i];
+                      final isSelected =
+                          _selectedIds.contains(file['id'].toString());
+                      return ListTile(
+                        tileColor: isSelected ? Colors.blue[50] : null,
+                        leading: _isSelectionMode
+                            ? Checkbox(
+                                value: isSelected,
+                                onChanged: (_) => _toggleSelection(file['id']))
+                            : const Icon(Icons.delete_outline),
+                        title: Text(file['name'],
+                            style: const TextStyle(
+                                decoration: TextDecoration.lineThrough)),
+                        onLongPress: () => _toggleSelection(file['id']),
+                        onTap: () => _isSelectionMode
+                            ? _toggleSelection(file['id'])
+                            : null,
+                      );
+                    },
+                  ),
       ),
     );
   }

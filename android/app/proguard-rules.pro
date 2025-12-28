@@ -18,3 +18,10 @@
 -keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
+
+# Ignore missing Play Core classes referenced by the Flutter Engine
+-dontwarn com.google.android.play.core.**
+-keep class com.google.android.play.core.** { *; }
+
+# If you still see errors related to deferred components, ignore the embedding references
+-dontwarn io.flutter.embedding.engine.deferredcomponents.**

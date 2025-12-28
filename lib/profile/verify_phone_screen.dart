@@ -25,7 +25,8 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
     if (code.isEmpty) return;
     setState(() => _isLoading = true);
 
-    final auth = Supabase.instance.client.auth; // use dynamic calls for compatibility
+    final auth =
+        Supabase.instance.client.auth; // use dynamic calls for compatibility
     try {
       // Try several possible method names to support different library versions
       final d = auth as dynamic;
@@ -75,7 +76,9 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         throw e;
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Verify failed: $e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Verify failed: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -90,7 +93,9 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         print('[VerifyPhone] Sending code via signInWithOtp(phone)');
         await auth.signInWithOtp(phone: widget.phone);
         print('[VerifyPhone] signInWithOtp sent');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent')));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Verification code sent')));
         return;
       } catch (e) {
         print('[VerifyPhone] signInWithOtp failed: $e');
@@ -99,16 +104,21 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
       // fallback: signInWithOtp(phone: ... , options: ...)
       try {
         print('[VerifyPhone] Sending code via signInWithOtp(phone, options)');
-        await auth.signInWithOtp(phone: widget.phone, options: {'shouldCreateUser': false});
+        await auth.signInWithOtp(
+            phone: widget.phone, options: {'shouldCreateUser': false});
         print('[VerifyPhone] signInWithOtp(options) sent');
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Verification code sent')));
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Verification code sent')));
         return;
       } catch (e) {
         print('[VerifyPhone] signInWithOtp(options) failed: $e');
         throw e;
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed: $e'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Send failed: $e'), backgroundColor: Colors.red));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -122,7 +132,9 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
     try {
       if (mounted) await context.read<ProfileProvider>().loadProfile();
     } catch (_) {}
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified'), backgroundColor: Colors.green));
+    if (mounted)
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Phone verified'), backgroundColor: Colors.green));
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -134,11 +146,13 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Text('A verification code was sent to ${widget.phone}. Enter it below to verify your phone.'),
+            Text(
+                'A verification code was sent to ${widget.phone}. Enter it below to verify your phone.'),
             const SizedBox(height: 16),
             TextField(
               controller: _codeController,
-              decoration: const InputDecoration(labelText: 'Verification code', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                  labelText: 'Verification code', border: OutlineInputBorder()),
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 16),
@@ -147,11 +161,19 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _verifyCode,
-                    child: _isLoading ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Verify'),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Verify'),
                   ),
                 ),
                 const SizedBox(width: 8),
-                TextButton(onPressed: _isLoading ? null : _resendCode, child: const Text('Resend'))
+                TextButton(
+                    onPressed: _isLoading ? null : _resendCode,
+                    child: const Text('Resend'))
               ],
             )
           ],

@@ -46,7 +46,9 @@ class _DocumentsDebugScreenState extends State<DocumentsDebugScreen> {
       });
     } catch (e) {
       // Show a SnackBar so user sees the error
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fetch error: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Fetch error: $e')));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -77,10 +79,14 @@ class _DocumentsDebugScreenState extends State<DocumentsDebugScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Auth user: ${Supabase.instance.client.auth.currentUser?.id ?? '–'}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(
+                        'Auth user: ${Supabase.instance.client.auth.currentUser?.id ?? '–'}',
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 6),
-                    Text('Email: ${Supabase.instance.client.auth.currentUser?.email ?? '–'}'),
-                    Text('Phone: ${Supabase.instance.client.auth.currentUser?.phone ?? '–'}'),
+                    Text(
+                        'Email: ${Supabase.instance.client.auth.currentUser?.email ?? '–'}'),
+                    Text(
+                        'Phone: ${Supabase.instance.client.auth.currentUser?.phone ?? '–'}'),
                     Text('Profile name: ${profile.name ?? '–'}'),
                     Text('Avatar: ${profile.avatarUrl ?? '–'}'),
                   ],
@@ -124,14 +130,17 @@ class _DocumentsDebugScreenState extends State<DocumentsDebugScreen> {
                           return ListTile(
                             dense: true,
                             title: Text(r['name'] ?? '(no name)'),
-                            subtitle: Text('id: ${r['id']}\nfolder: ${r['folder_id']}\nis_deleted: ${r['is_deleted']}\npath: ${r['file_path']}\nuploaded_by: ${r['uploaded_by']}'),
+                            subtitle: Text(
+                                'id: ${r['id']}\nfolder: ${r['folder_id']}\nis_deleted: ${r['is_deleted']}\npath: ${r['file_path']}\nuploaded_by: ${r['uploaded_by']}'),
                             isThreeLine: true,
                             trailing: Text(r['created_at']?.toString() ?? ''),
                             onTap: () async {
                               // Quick copy id to clipboard
                               final id = r['id']?.toString() ?? '';
                               if (id.isNotEmpty) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Id copied: ${id.substring(0, 8)}...')));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                    content: Text(
+                                        'Id copied: ${id.substring(0, 8)}...')));
                               }
                             },
                           );

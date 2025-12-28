@@ -12,9 +12,9 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   // Toggle between Login and Sign Up
-  bool _isLogin = true; 
+  bool _isLogin = true;
   bool _isLoading = false;
 
   Future<void> _authenticate() async {
@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: email,
           password: password,
         );
-        
+
         // Optional: specific message for new users
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -60,15 +60,14 @@ class _LoginScreenState extends State<LoginScreen> {
           MaterialPageRoute(builder: (_) => const MainLayout()),
         );
       }
-
     } catch (e) {
       // FAILURE: Show error
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().contains("Invalid login") 
-              ? "Invalid email or password" 
-              : "Error: ${e.toString()}"),
+            content: Text(e.toString().contains("Invalid login")
+                ? "Invalid email or password"
+                : "Error: ${e.toString()}"),
             backgroundColor: Colors.red,
           ),
         );

@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class PdfService {
-  
   // Convert a single online image to a PDF file
   Future<String?> convertImageToPdf(String imageUrl, String fileName) async {
     try {
@@ -35,14 +34,16 @@ class PdfService {
       String savePath;
       if (Platform.isAndroid) {
         // Permissions check
-        if (await Permission.manageExternalStorage.isGranted || await Permission.storage.isGranted) {
-           // Good
-        } else if (await Permission.manageExternalStorage.request().isGranted || await Permission.storage.request().isGranted) {
-           // Good
+        if (await Permission.manageExternalStorage.isGranted ||
+            await Permission.storage.isGranted) {
+          // Good
+        } else if (await Permission.manageExternalStorage.request().isGranted ||
+            await Permission.storage.request().isGranted) {
+          // Good
         } else {
-           throw "Permission Denied";
+          throw "Permission Denied";
         }
-        
+
         // ✅ Uses exact filename (which already has .pdf from folder_screen)
         savePath = "/storage/emulated/0/Download/$fileName";
       } else {

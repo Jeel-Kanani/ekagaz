@@ -1,7 +1,6 @@
 import 'package:share_plus/share_plus.dart';
 
 class ShareService {
-  
   // Share a single file (PDF or Image)
   static Future<void> shareFile(String filePath, {String? text}) async {
     final file = XFile(filePath);

@@ -15,7 +15,7 @@ class _MainLayoutState extends State<MainLayout> {
 
   // The 3 main screens of your app
   final List<Widget> _screens = [
-    const HomeScreen(),   // 0: Dashboard
+    const HomeScreen(), // 0: Dashboard
     const SearchScreen(), // 1: Search
     const SettingsScreen() // 2: Settings
   ];
@@ -31,20 +31,17 @@ class _MainLayoutState extends State<MainLayout> {
         },
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined), 
-            selectedIcon: Icon(Icons.dashboard),
-            label: 'Home'
-          ),
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard),
+              label: 'Home'),
           NavigationDestination(
-            icon: Icon(Icons.search_outlined), 
-            selectedIcon: Icon(Icons.search),
-            label: 'Search'
-          ),
+              icon: Icon(Icons.search_outlined),
+              selectedIcon: Icon(Icons.search),
+              label: 'Search'),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined), 
-            selectedIcon: Icon(Icons.settings),
-            label: 'Settings'
-          ),
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: 'Settings'),
         ],
       ),
     );

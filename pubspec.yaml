@@ -37,6 +37,10 @@ dependencies:
   google_mlkit_document_scanner: ^0.2.0
   google_mlkit_text_recognition: ^0.13.0
   image_cropper: ^11.0.0
+  mobile_scanner: ^7.1.4
+  
+  # QR & Pretty rendering
+  pretty_qr_code: ^3.5.0
   
   # Utilities
   # ✅ UPGRADED to fix Java crash
@@ -44,6 +48,14 @@ dependencies:
   share_plus: ^9.0.0
   pdf: ^3.10.8
   open_file: ^3.3.2
+  
+  # Loading skeletons
+  skeletonizer: ^2.1.2
+
+  # Caching & Icons
+  cached_network_image: ^3.2.3
+  font_awesome_flutter: ^10.4.0
+  intl_phone_field: ^3.0.1
 
 dev_dependencies:
   flutter_test:
