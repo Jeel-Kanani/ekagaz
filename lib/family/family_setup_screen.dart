@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'family_service.dart';
 import 'join_family_screen.dart';
 import '../layout/main_layout.dart';
+import '../profile/edit_profile_screen.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:flutter/services.dart';
 import '../auth/login_screen.dart';
@@ -14,38 +15,45 @@ class FamilySetupScreen extends StatefulWidget {
   State<FamilySetupScreen> createState() => _FamilySetupScreenState();
 }
 
-class _FamilySetupScreenState extends State<FamilySetupScreen> {
+class _FamilySetupScreenState extends State<FamilySetupScreen>
+    with SingleTickerProviderStateMixin {
   final _familyService = FamilyService();
   final _nameController = TextEditingController();
   final _idController = TextEditingController();
   bool _isLoading = false;
-  bool _scanned = false;
-  bool _showManualJoin = false;
+
+  bool _scanned = false; // kept for scanner debouncing
+  // collapsed landing/detail state removed to simplify UI; always show a simple landing with Create and Join actions.
+
+  @override
+  void initState() {
+    super.initState();
+
+  }
 
   @override
   void dispose() {
+
     _nameController.dispose();
     _idController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleCreate() async {
-    final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+  Future<void> _handleCreate([String? name]) async {
+    final famName = (name ?? _nameController.text).trim();
+    if (famName.isEmpty) return;
 
     setState(() => _isLoading = true);
     try {
-      await _familyService.createFamily(name);
+      await _familyService.createFamily(famName);
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainLayout()),
-          (route) => false,
-        );
+        // After creating, route the user to profile editing first, then to the main dashboard.
+        final res = await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+        // Regardless of whether they completed profile editing, proceed to dashboard so they can start using the app.
+        if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const MainLayout()), (route) => false);
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -60,26 +68,21 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
       // Accept raw ids or invite links like famvault://join/<id>
       var familyId = id;
       final uri = Uri.tryParse(raw);
-      if (uri != null && uri.pathSegments.isNotEmpty)
-        familyId = uri.pathSegments.last;
+      if (uri != null && uri.pathSegments.isNotEmpty) familyId = uri.pathSegments.last;
 
       await _familyService.joinFamily(familyId);
+
       if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainLayout()),
-          (route) => false,
-        );
+        // After joining, send the user to edit their profile first, then to the dashboard
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+        if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const MainLayout()), (route) => false);
       }
     } catch (e) {
       if (mounted) {
         final msg = e.toString();
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Error: $msg")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $msg")));
         if (msg.contains('Not authenticated')) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
-          );
+          Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
         }
       }
     } finally {
@@ -87,161 +90,62 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
     }
   }
 
-  // Opens a modal bottom sheet with the camera scanner. It closes the sheet and then calls _handleJoin.
-  Future<void> _openScannerModal() async {
-    _scanned = false;
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
-      builder: (ctx) {
-        return SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.75,
-          child: Column(
-            children: [
-              AppBar(
-                automaticallyImplyLeading: false,
-                title: const Text('Scan Invite'),
-                actions: [
-                  IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.of(ctx).pop())
-                ],
-              ),
-              Expanded(
-                child: MobileScanner(
-                  onDetect: (capture) async {
-                    if (_scanned) return;
-                    final barcodes = capture.barcodes;
-                    if (barcodes.isEmpty) return;
-                    final raw = barcodes.first.rawValue ?? '';
-                    if (raw.isEmpty) return;
-                    _scanned = true;
-                    // Close scanner sheet before navigating
-                    Navigator.of(ctx).pop();
-                    await _handleJoin(raw);
-                    _scanned = false;
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildCards() {
+  Widget _buildLanding() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const SizedBox(height: 24),
+        const SizedBox(height: 40),
+        const Text('Welcome to Famvault',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        const Text(
+            'Securely store family documents and invite members with a QR',
+            textAlign: TextAlign.center),
+        const SizedBox(height: 30),
 
-        // Create Card
-        Card(
-          elevation: 4,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.add_box, size: 28, color: Colors.blue),
-                    SizedBox(width: 12),
-                    Text('Create Your Vault',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                      labelText: 'Family Name', border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleCreate,
-                    child: _isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text('Create Vault'),
-                  ),
-                ),
-              ],
-            ),
+        // Create family — open a small dialog to collect family name
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.add_box, size: 22),
+            label: const Text('Create a New Family', style: TextStyle(fontSize: 16)),
+            onPressed: _isLoading
+                ? null
+                : () async {
+                    final name = await showDialog<String>(
+                      context: context,
+                      builder: (ctx) {
+                        final controller = TextEditingController();
+                        return AlertDialog(
+                          title: const Text('Family Name'),
+                          content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'e.g., Martinez Family')),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                            TextButton(onPressed: () => Navigator.pop(ctx, controller.text.trim()), child: const Text('Create')),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (name != null && name.isNotEmpty) await _handleCreate(name);
+                  },
           ),
         ),
+        const SizedBox(height: 12),
 
-        const SizedBox(height: 24),
-
-        // Join Card
-        Card(
-          elevation: 4,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: const [
-                    Icon(Icons.qr_code_scanner, size: 28, color: Colors.green),
-                    SizedBox(width: 12),
-                    Text('Join a Family',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.camera_alt),
-                    label: const Text('Scan QR Code'),
-                    onPressed: () => _openScannerModal(),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      setState(() => _showManualJoin = !_showManualJoin),
-                  child: Text(_showManualJoin
-                      ? 'Hide Code Input'
-                      : 'Type code instead'),
-                ),
-                if (_showManualJoin) ...[
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _idController,
-                    decoration: const InputDecoration(
-                        labelText: 'Enter family ID or link',
-                        border: OutlineInputBorder()),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 44,
-                    child: ElevatedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () => _handleJoin(_idController.text),
-                      child: _isLoading
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Text('Join by ID'),
-                    ),
-                  )
-                ]
-              ],
-            ),
+        // Join family — open the dedicated join screen which supports scan, code, and link
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: OutlinedButton.icon(
+            icon: const Icon(Icons.group_add),
+            label: const Text('Join a Family', style: TextStyle(fontSize: 16)),
+            onPressed: () {
+              if (mounted) Navigator.of(context).push(MaterialPageRoute(builder: (_) => const JoinFamilyScreen()));
+            },
           ),
         ),
-
-        const SizedBox(height: 24),
       ],
     );
   }
@@ -286,7 +190,7 @@ class _FamilySetupScreenState extends State<FamilySetupScreen> {
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: _buildCards(),
+            child: _buildLanding(),
           ),
         ),
       ), // close Scaffold

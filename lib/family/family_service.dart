@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class FamilyService {
@@ -106,6 +108,82 @@ class FamilyService {
       'dp_url': dpUrl,
       'updated_at': DateTime.now().toIso8601String()
     }).eq('id', familyId);
+  }
+
+  /// Upload new family avatar bytes, delete old storage object if present, and update the family row.
+  /// Returns true on success.
+  Future<bool> updateFamilyAvatar({
+    required String familyId,
+    required List<int> fileBytes,
+    required String fileExt,
+    String bucket = 'family-avatars',
+    String? oldImageUrl,
+    void Function(double percent)? onProgress,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw 'Not authenticated';
+
+    try {
+      // delete previous if it was stored in the bucket
+      if (oldImageUrl != null && oldImageUrl.contains('$bucket/')) {
+        final oldPath = oldImageUrl.split('$bucket/').last;
+        try {
+          await _client.storage.from(bucket).remove([oldPath]);
+        } catch (_) {
+          // ignore remove errors
+        }
+      }
+
+      // Best-effort progress callbacks (supabase_flutter's uploadBinary has no progress callback yet)
+      try {
+        onProgress?.call(15);
+      } catch (_) {}
+
+      final fileName = '$familyId-${DateTime.now().millisecondsSinceEpoch}$fileExt';
+      final path = 'avatars/$fileName';
+
+      await _client.storage.from(bucket).uploadBinary(path, Uint8List.fromList(fileBytes), fileOptions: const FileOptions(upsert: true));
+
+      try {
+        onProgress?.call(70);
+      } catch (_) {}
+
+      final publicUrl = _client.storage.from(bucket).getPublicUrl(path);
+
+      await _client.from('families').update({'dp_url': publicUrl, 'updated_at': DateTime.now().toIso8601String()}).eq('id', familyId);
+
+      try {
+        onProgress?.call(100);
+      } catch (_) {}
+
+      // small delay for UX
+      await Future.delayed(const Duration(milliseconds: 300));
+      onProgress?.call(0);
+      return true;
+    } catch (e) {
+      onProgress?.call(0);
+      return false;
+    }
+  }
+
+  /// Delete only the family avatar (remove from storage + clear families dp_url)
+  Future<bool> deleteFamilyAvatar({required String familyId, String? oldImageUrl, String bucket = 'family-avatars'}) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw 'Not authenticated';
+
+    try {
+      if (oldImageUrl != null && oldImageUrl.contains('$bucket/')) {
+        final oldPath = oldImageUrl.split('$bucket/').last;
+        try {
+          await _client.storage.from(bucket).remove([oldPath]);
+        } catch (_) {}
+      }
+
+      await _client.from('families').update({'dp_url': null, 'updated_at': DateTime.now().toIso8601String()}).eq('id', familyId);
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 
   // 3. HELPER (Public so we can call it from Repair button)

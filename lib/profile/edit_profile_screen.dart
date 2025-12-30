@@ -25,8 +25,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _phoneController = TextEditingController();
   bool _isLoading = false;
   String? _avatarUrl; // ✅ Explicitly typed as String?
-  String?
-      _initialFullPhone; // store initial full phone (+<cc><number>) to detect changes
+  String? _initialFullPhone; // store initial full phone (+<cc><number>) to detect changes
   String _selectedCountryCode = '+91'; // default
   // local number (digits only, 10 digits)
 
@@ -46,10 +45,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .select()
           .eq('id', user.id)
           .maybeSingle();
-
+      
       // Prefer profile phone column, fallback to user's auth phone
-      final fullPhone =
-          (data != null ? (data['phone'] as String?) : null) ?? user.phone;
+      final fullPhone = (data != null ? (data['phone'] as String?) : null) ?? user.phone;
 
       // Parse out country code and local 10-digit part if possible
       if (fullPhone != null && fullPhone.isNotEmpty) {
@@ -60,23 +58,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           final cc = '+${m.group(1)}';
           final rest = m.group(2) ?? '';
           _selectedCountryCode = cc;
-          final local =
-              rest.length <= 10 ? rest : rest.substring(rest.length - 10);
+          final local = rest.length <= 10 ? rest : rest.substring(rest.length - 10);
           _phoneController.text = local;
-          _phoneController.selection =
-              TextSelection.collapsed(offset: _phoneController.text.length);
+          _phoneController.selection = TextSelection.collapsed(offset: _phoneController.text.length);
         } else {
           // fallback: try to keep last 10 digits
-          final digits = RegExp(r'\d+')
-              .allMatches(fullPhone)
-              .map((e) => e.group(0))
-              .join();
-          final local = digits.length <= 10
-              ? digits
-              : digits.substring(digits.length - 10);
+          final digits = RegExp(r'\d+').allMatches(fullPhone).map((e) => e.group(0)).join();
+          final local = digits.length <= 10 ? digits : digits.substring(digits.length - 10);
           _phoneController.text = local;
-          _phoneController.selection =
-              TextSelection.collapsed(offset: _phoneController.text.length);
+          _phoneController.selection = TextSelection.collapsed(offset: _phoneController.text.length);
         }
       } else {
         _initialFullPhone = null;
@@ -90,18 +80,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     }
   }
-
   bool _isInputValid() {
     final nameValid = _nameController.text.trim().isNotEmpty;
     final phone = _phoneController.text.trim();
     // If phone is provided then it must be exactly 10 digits (local part)
 
-    final simplePhoneValid =
-        phone.isEmpty || RegExp(r'^\d{10}$').hasMatch(phone);
+    final simplePhoneValid = phone.isEmpty || RegExp(r'^\d{10}$').hasMatch(phone);
     return nameValid && simplePhoneValid;
   }
 
-  void _onFormChanged() => setState(() {});
+  void _onFormChanged() => setState((){});
 
   @override
   void dispose() {
@@ -122,18 +110,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            ListTile(
-                title: const Text('Take Photo'),
-                leading: const Icon(Icons.camera_alt),
-                onTap: () => Navigator.pop(ctx, 'camera')),
-            ListTile(
-                title: const Text('Choose from Gallery'),
-                leading: const Icon(Icons.photo_library),
-                onTap: () => Navigator.pop(ctx, 'gallery')),
-            ListTile(
-                title: const Text('Cancel'),
-                leading: const Icon(Icons.close),
-                onTap: () => Navigator.pop(ctx, null)),
+            ListTile(title: const Text('Take Photo'), leading: const Icon(Icons.camera_alt), onTap: () => Navigator.pop(ctx, 'camera')),
+            ListTile(title: const Text('Choose from Gallery'), leading: const Icon(Icons.photo_library), onTap: () => Navigator.pop(ctx, 'gallery')),
+            ListTile(title: const Text('Cancel'), leading: const Icon(Icons.close), onTap: () => Navigator.pop(ctx, null)),
           ],
         ),
       ),
@@ -141,10 +120,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (choice == null) return;
 
-    final source =
-        choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
-    final picked = await picker.pickImage(
-        source: source, maxWidth: 2048, maxHeight: 2048, imageQuality: 85);
+    final source = choice == 'camera' ? ImageSource.camera : ImageSource.gallery;
+    final picked = await picker.pickImage(source: source, maxWidth: 2048, maxHeight: 2048, imageQuality: 85);
     if (picked == null) return;
 
     setState(() => _isLoading = true);
@@ -156,10 +133,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           sourcePath: picked.path,
           aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
           uiSettings: [
-            AndroidUiSettings(
-                toolbarTitle: 'Crop Photo',
-                toolbarColor: Colors.blue,
-                toolbarWidgetColor: Colors.white),
+            AndroidUiSettings(toolbarTitle: 'Crop Photo', toolbarColor: Colors.blue, toolbarWidgetColor: Colors.white),
             IOSUiSettings(title: 'Crop Photo'),
           ],
         );
@@ -170,9 +144,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Not authenticated'), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not authenticated'), backgroundColor: Colors.red));
         return;
       }
 
@@ -183,14 +155,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final fileName = '${user.id}/profile.jpg';
 
       await Supabase.instance.client.storage.from('avatars').uploadBinary(
-            fileName,
-            bytes,
-            fileOptions: const FileOptions(upsert: true),
-          );
+        fileName,
+        bytes,
+        fileOptions: const FileOptions(upsert: true),
+      );
 
-      final imageUrl = Supabase.instance.client.storage
-          .from('avatars')
-          .getPublicUrl(fileName);
+      final imageUrl = Supabase.instance.client.storage.from('avatars').getPublicUrl(fileName);
 
       await Supabase.instance.client.from('profiles').upsert({
         'id': user.id,
@@ -218,25 +188,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               context: context,
               builder: (ctx) => AlertDialog(
                 title: const Text('Set Family Photo?'),
-                content: const Text(
-                    'Do you want to set this image as the family display picture?'),
+                content: const Text('Do you want to set this image as the family display picture?'),
                 actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('No')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Yes')),
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
                 ],
               ),
             );
 
             if (confirm == true) {
               await FamilyService().updateFamilyDpUrl(familyId, imageUrl);
-              if (mounted)
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text('Family picture updated'),
-                    backgroundColor: Colors.green));
+              if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Family picture updated'), backgroundColor: Colors.green));
             }
           }
         }
@@ -244,14 +206,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         // ignore - non-critical
       }
 
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Profile picture updated!'),
-            backgroundColor: Colors.green));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile picture updated!'), backgroundColor: Colors.green));
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Upload failed: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -265,9 +222,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       // Check auth
       if (user == null) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Not authenticated'), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Not authenticated'), backgroundColor: Colors.red));
         setState(() => _isLoading = false);
         return;
       }
@@ -292,41 +247,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         );
         if (mounted) {
           print('[EditProfile] OTP requested for: $fullPhone');
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('OTP sent! Opening verification flow...'),
-              backgroundColor: Colors.orange));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('OTP sent! Opening verification flow...'), backgroundColor: Colors.orange)
+          );
 
           // Automatically navigate to verification screen
-          final res = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => VerifyPhoneScreen(phone: fullPhone)));
+          final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyPhoneScreen(phone: fullPhone)));
           if (res == true) {
             // re-load profile to reflect verified phone
             await _loadProfile();
-            if (mounted)
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Phone verified'),
-                  backgroundColor: Colors.green));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified'), backgroundColor: Colors.green));
+            // Close the profile editor and signal completion
+            if (mounted) Navigator.pop(context, true);
           }
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Profile saved!'), backgroundColor: Colors.green));
-          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile saved!'), backgroundColor: Colors.green));
+          Navigator.pop(context, true);
         }
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red));
     } finally {
       setState(() => _isLoading = false);
       // update the initial full phone to the currently stored value
       final local = _phoneController.text.trim();
-      _initialFullPhone =
-          local.isNotEmpty ? '$_selectedCountryCode$local' : _initialFullPhone;
+      _initialFullPhone = local.isNotEmpty ? '$_selectedCountryCode$local' : _initialFullPhone;
     }
   }
 
@@ -339,10 +286,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('No authenticated user found'),
-              backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No authenticated user found'), backgroundColor: Colors.red));
         setState(() => _isLoading = false);
         return;
       }
@@ -350,8 +294,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       // Preferred: call server-side endpoint (Edge Function) that performs the deletion with service_role key
       try {
         if (USER_DELETE_ENDPOINT != 'https://example.com/delete-user') {
-          final token =
-              Supabase.instance.client.auth.currentSession?.accessToken;
+          final token = Supabase.instance.client.auth.currentSession?.accessToken;
           if (token == null) throw 'No access token';
 
           final uri = Uri.parse(USER_DELETE_ENDPOINT);
@@ -361,21 +304,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           });
 
           if (resp.statusCode == 200) {
-            if (mounted)
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Account deleted'),
-                  backgroundColor: Colors.green));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account deleted'), backgroundColor: Colors.green));
             await Supabase.instance.client.auth.signOut();
-            if (mounted)
-              Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false);
+            if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
             return;
           } else {
-            if (mounted)
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text('Server delete failed: ${resp.statusCode}'),
-                  backgroundColor: Colors.red));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Server delete failed: ${resp.statusCode}'), backgroundColor: Colors.red));
             // fall-through to client attempt
           }
         }
@@ -400,21 +334,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       if (deleted) {
         await Supabase.instance.client.auth.signOut();
-        if (mounted)
-          Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const LoginScreen()),
-              (route) => false);
+        if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
       } else {
-        if (mounted)
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Account deletion is not supported from this client. Deploy the server delete function and set USER_DELETE_ENDPOINT.'),
-              backgroundColor: Colors.orange));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Account deletion is not supported from this client. Deploy the server delete function and set USER_DELETE_ENDPOINT.'), backgroundColor: Colors.orange));
       }
     } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Delete failed: $e'), backgroundColor: Colors.red));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e'), backgroundColor: Colors.red));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -434,37 +359,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 radius: 50,
                 backgroundColor: Colors.grey[300],
                 // ✅ FIX: Correctly check for null and wrap in NetworkImage
-                backgroundImage:
-                    _avatarUrl != null ? NetworkImage(_avatarUrl!) : null,
-                child: _avatarUrl == null
-                    ? (_isLoading
-                        ? const CircularProgressIndicator()
-                        : const Icon(Icons.camera_alt,
-                            size: 40, color: Colors.grey))
+                backgroundImage: _avatarUrl != null 
+                    ? NetworkImage(_avatarUrl!) 
                     : null,
+                child: _avatarUrl == null 
+                  ? (_isLoading ? const CircularProgressIndicator() : const Icon(Icons.camera_alt, size: 40, color: Colors.grey))
+                  : null,
               ),
             ),
             const SizedBox(height: 10),
-            const Text("Tap to change photo",
-                style: TextStyle(color: Colors.grey)),
+            const Text("Tap to change photo", style: TextStyle(color: Colors.grey)),
             const SizedBox(height: 30),
 
             // Read-only email
             TextField(
-              controller: TextEditingController(
-                  text: Supabase.instance.client.auth.currentUser?.email),
+              controller: TextEditingController(text: Supabase.instance.client.auth.currentUser?.email),
               enabled: false,
-              decoration: const InputDecoration(
-                  labelText: "Email Address (Permanent)",
-                  border: OutlineInputBorder(),
-                  filled: true),
+              decoration: const InputDecoration(labelText: "Email Address (Permanent)", border: OutlineInputBorder(), filled: true),
             ),
             const SizedBox(height: 16),
 
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
-                  labelText: "Full Name", border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: "Full Name", border: OutlineInputBorder()),
             ),
             const SizedBox(height: 12),
             // International phone input with country selector and validation ✅
@@ -475,23 +392,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   controller: _phoneController,
                   initialCountryCode: 'IN', // +91 default
                   showCursor: true,
-                  decoration: const InputDecoration(
-                      labelText: 'Phone Number',
-                      border: OutlineInputBorder(),
-                      hintText: '9876543210'),
+                  decoration: const InputDecoration(labelText: 'Phone Number', border: OutlineInputBorder(), hintText: '9876543210'),
                   onChanged: (phone) {
                     // Update selected country and keep the controller's cursor at end
                     setState(() {
                       _selectedCountryCode = '+${phone.countryCode}';
-                      final local = phone.number;
+                      final local = phone.number ?? '';
                       _phoneController.text = local;
-                      _phoneController.selection = TextSelection.collapsed(
-                          offset: _phoneController.text.length);
+                      _phoneController.selection = TextSelection.collapsed(offset: _phoneController.text.length);
                     });
                   },
                   onCountryChanged: (country) {
-                    setState(
-                        () => _selectedCountryCode = '+${country.dialCode}');
+                    setState(() => _selectedCountryCode = '+${country.dialCode}');
                   },
                 ),
                 const SizedBox(height: 8),
@@ -503,11 +415,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       alignment: Alignment.centerRight,
                       child: Chip(
                         label: Text(verified ? 'Verified' : 'Unverified'),
-                        backgroundColor:
-                            verified ? Colors.green[100] : Colors.orange[100],
-                        avatar: Icon(
-                            verified ? Icons.check_circle : Icons.error,
-                            color: verified ? Colors.green : Colors.orange),
+                        backgroundColor: verified ? Colors.green[100] : Colors.orange[100],
+                        avatar: Icon(verified ? Icons.check_circle : Icons.error, color: verified ? Colors.green : Colors.orange),
                       ),
                     );
                   },
@@ -520,19 +429,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed:
-                    (!_isLoading && _isInputValid()) ? _updateProfile : null,
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[900],
-                    foregroundColor: Colors.white),
-                child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Save Changes"),
+                onPressed: (!_isLoading && _isInputValid()) ? _updateProfile : null,
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
+                child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes"),
               ),
             ),
-            if (_phoneController.text.isNotEmpty &&
-                '$_selectedCountryCode${_phoneController.text.trim()}' !=
-                    (_initialFullPhone ?? ''))
+            if (_phoneController.text.isNotEmpty && '$_selectedCountryCode${_phoneController.text.trim()}' != (_initialFullPhone ?? ''))
               Padding(
                 padding: const EdgeInsets.only(top: 12.0),
                 child: SizedBox(
@@ -542,31 +444,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     onPressed: () async {
                       // Open OTP screen for the full number
                       final local = _phoneController.text.trim();
-                      if (local.isEmpty ||
-                          !RegExp(r'^\d{10}$').hasMatch(local)) {
-                        if (mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      'Enter a valid 10-digit phone number'),
-                                  backgroundColor: Colors.orange));
+                      if (local.isEmpty || !RegExp(r'^\d{10}$').hasMatch(local)) {
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid 10-digit phone number'), backgroundColor: Colors.orange));
                         return;
                       }
 
                       final fullPhone = '$_selectedCountryCode$local';
-                      final res = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) =>
-                                  VerifyPhoneScreen(phone: fullPhone)));
+                      final res = await Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyPhoneScreen(phone: fullPhone)));
                       if (res == true) {
                         // refresh profile/metadata
                         await _loadProfile();
-                        if (mounted)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('Phone verified and updated'),
-                                  backgroundColor: Colors.green));
+                        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phone verified and updated'), backgroundColor: Colors.green));
+                        // Close editor and signal completion
+                        if (mounted) Navigator.pop(context, true);
                       }
                     },
                     child: const Text('Verify Phone'),
@@ -585,16 +475,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     context: context,
                     builder: (ctx) => AlertDialog(
                       title: const Text('Delete Account?'),
-                      content: const Text(
-                          'This will permanently delete your account and data. This cannot be undone.'),
+                      content: const Text('This will permanently delete your account and data. This cannot be undone.'),
                       actions: [
-                        TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel')),
-                        TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Delete',
-                                style: TextStyle(color: Colors.red))),
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
                       ],
                     ),
                   );
@@ -603,11 +487,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     await _deleteAccount();
                   }
                 },
-                child: const Text('Delete Account',
-                    style: TextStyle(color: Colors.red)),
+                child: const Text('Delete Account', style: TextStyle(color: Colors.red)),
               ),
-            ),
-          ],
+            ),          ],
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'family_service.dart';
 import '../layout/main_layout.dart';
 import '../auth/login_screen.dart';
+import '../profile/edit_profile_screen.dart';
 
 class JoinFamilyScreen extends StatefulWidget {
   const JoinFamilyScreen({super.key});
@@ -37,13 +38,10 @@ class _JoinFamilyScreenState extends State<JoinFamilyScreen>
     try {
       await FamilyService().joinFamily(code);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Joined family!'), backgroundColor: Colors.green));
-        // Navigate to the main dashboard and clear the back stack so the user cannot return to setup
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const MainLayout()),
-          (route) => false,
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joined family!'), backgroundColor: Colors.green));
+        // Open profile edit first so the user can set name/avatar; afterwards send to dashboard
+        await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+        if (mounted) Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const MainLayout()), (route) => false);
       }
     } catch (e) {
       if (mounted) {
