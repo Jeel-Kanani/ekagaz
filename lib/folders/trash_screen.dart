@@ -70,7 +70,7 @@ class _TrashScreenState extends State<TrashScreen> {
       await Supabase.instance.client
           .from('documents')
           .update({'is_deleted': false})
-          .filter('id', 'in', _selectedIds.toList());
+          .inFilter('id', _selectedIds.toList());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${_selectedIds.length} files restored"), backgroundColor: Colors.green));
@@ -111,7 +111,7 @@ class _TrashScreenState extends State<TrashScreen> {
       final delRes = await Supabase.instance.client
           .from('documents')
           .delete()
-          .filter('id', 'in', _selectedIds.toList())
+          .inFilter('id', _selectedIds.toList())
           .select();
 
       final deletedRows = List<Map<String, dynamic>>.from(delRes);

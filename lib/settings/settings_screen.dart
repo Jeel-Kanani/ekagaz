@@ -89,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(_isLockEnabled ? "Enabled" : "Disabled"),
             trailing: Switch(
               value: _isLockEnabled, 
-              activeColor: Colors.purple,
+              activeThumbColor: Colors.purple,
               onChanged: _toggleLock
             ),
           ),

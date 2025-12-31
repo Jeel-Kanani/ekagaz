@@ -72,7 +72,7 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         return;
       } catch (e) {
         print('[VerifyPhone] verifyOTP fallback failed: $e');
-        throw e;
+        rethrow;
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Verify failed: $e'), backgroundColor: Colors.red));
@@ -105,7 +105,7 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         return;
       } catch (e) {
         print('[VerifyPhone] signInWithOtp(options) failed: $e');
-        throw e;
+        rethrow;
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed: $e'), backgroundColor: Colors.red));

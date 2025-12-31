@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart'; // ✅ Ensure this is open_filex
 import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
@@ -15,8 +15,10 @@ class NotificationService {
     await _notifications.initialize(
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        if (response.payload != null) {
-          OpenFile.open(response.payload);
+        // ✅ FIX: Assign to a local variable to allow null-check promotion
+        final payload = response.payload;
+        if (payload != null) {
+          OpenFilex.open(payload);
         }
       },
     );

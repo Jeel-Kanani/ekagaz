@@ -10,7 +10,7 @@ packages:
     source: hosted
     version: "1.0.0"
   app_links:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: app_links
       sha256: "5f88447519add627fe1cbcab4fd1da3d4fed15b9baf29f28b22535c95ecee3e8"
@@ -121,6 +121,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.1.2"
+  country_code_picker:
+    dependency: "direct main"
+    description:
+      name: country_code_picker
+      sha256: f0411f4833b6f98e8b7215f4fa3813bcc88e50f13925f70a170dbd36e3e447f5
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.4.1"
   cross_file:
     dependency: transitive
     description:
@@ -161,6 +169,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.11"
+  diacritic:
+    dependency: transitive
+    description:
+      name: diacritic
+      sha256: "12981945ec38931748836cd76f2b38773118d0baef3c68404bdfde9566147876"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.6"
   dio:
     dependency: "direct main"
     description:
@@ -616,6 +632,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.6"
+  mobile_scanner:
+    dependency: "direct main"
+    description:
+      name: mobile_scanner
+      sha256: d234581c090526676fd8fab4ada92f35c6746e3fb4f05a399665d75a399fb760
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.2.3"
   nested:
     dependency: transitive
     description:
@@ -624,70 +648,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.0"
-  open_file:
+  open_filex:
     dependency: "direct main"
     description:
-      name: open_file
-      sha256: a5ef7162fb9b72955d42abab9f3159b2fd3ee81a27187535c8038dcd5d1fa7f2
+      name: open_filex
+      sha256: "9976da61b6a72302cf3b1efbce259200cd40232643a467aac7370addf94d6900"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.4"
-  open_file_android:
-    dependency: transitive
-    description:
-      name: open_file_android
-      sha256: "58141fcaece2f453a9684509a7275f231ac0e3d6ceb9a5e6de310a7dff9084aa"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.6"
-  open_file_ios:
-    dependency: transitive
-    description:
-      name: open_file_ios
-      sha256: "02996f01e5f6863832068e97f8f3a5ef9b613516db6897f373b43b79849e4d07"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.3"
-  open_file_linux:
-    dependency: transitive
-    description:
-      name: open_file_linux
-      sha256: d189f799eecbb139c97f8bc7d303f9e720954fa4e0fa1b0b7294767e5f2d7550
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.5"
-  open_file_mac:
-    dependency: transitive
-    description:
-      name: open_file_mac
-      sha256: "1440b1e37ceb0642208cfeb2c659c6cda27b25187a90635c9d1acb7d0584d324"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.3"
-  open_file_platform_interface:
-    dependency: transitive
-    description:
-      name: open_file_platform_interface
-      sha256: "101b424ca359632699a7e1213e83d025722ab668b9fd1412338221bf9b0e5757"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.3"
-  open_file_web:
-    dependency: transitive
-    description:
-      name: open_file_web
-      sha256: ba35c6f38c21c2bb4268a80927bb828353dda0edfce92e274e0b9639e4f31360
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.2"
-  open_file_windows:
-    dependency: transitive
-    description:
-      name: open_file_windows
-      sha256: d26c31ddf935a94a1a3aa43a23f4fff8a5ff4eea395fe7a8cb819cf55431c875
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.3"
+    version: "4.7.0"
   path:
     dependency: transitive
     description:
@@ -864,6 +832,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.6.0"
+  pretty_qr_code:
+    dependency: "direct main"
+    description:
+      name: pretty_qr_code
+      sha256: "2291db3f68d70a3dcd46c6bd599f30991ae4c02f27f36215fbb3f4865a609259"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.5.0"
   provider:
     dependency: "direct main"
     description:

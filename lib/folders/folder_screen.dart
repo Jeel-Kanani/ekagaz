@@ -6,7 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart'; 
 import 'package:permission_handler/permission_handler.dart'; 
 import 'package:gal/gal.dart'; 
-import 'package:open_file/open_file.dart';
+import 'package:open_filex/open_filex.dart';
 
 // ✅ Custom Imports
 
@@ -348,7 +348,7 @@ class _FolderScreenState extends State<FolderScreen> {
            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text("PDF Created!"), 
             backgroundColor: Colors.green,
-            action: SnackBarAction(label: "OPEN", textColor: Colors.white, onPressed: () => OpenFile.open(savePath)),
+            action: SnackBarAction(label: "OPEN", textColor: Colors.white, onPressed: () => OpenFilex.open(savePath)),
           ));
         }
       } 
@@ -443,7 +443,7 @@ class _FolderScreenState extends State<FolderScreen> {
       
       final insertedRows = List<Map<String, dynamic>>.from(inserted);
       if (insertedRows.isEmpty) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Save failed (no row returned)"), backgroundColor: Colors.red));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Save failed (no row returned)"), backgroundColor: Colors.red));
         print('Save PDF failed for path: $storagePath');
       } else {
         final id = insertedRows.first['id'];
