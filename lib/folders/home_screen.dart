@@ -5,9 +5,11 @@ import '../auth/login_screen.dart';
 import 'folder_screen.dart';
 import 'member_screen.dart';
 import '../core/smart_scanner_service.dart';
+import 'package:image/image.dart' as img;
 import '../family/family_service.dart';
 import '../family/family_setup_screen.dart';
 import '../profile/edit_profile_screen.dart'; 
+import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
  
@@ -21,8 +23,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   String _familyName = ""; // Default empty to show loading state cleanly
+  String _familyDpUrl = "";
   String _currentFamilyId = "";
   String _inviteCode = "";
+  String _myRole = "";
+  bool _isAdmin = false;
   List<Map<String, dynamic>> _generalFolders = [];
   List<Map<String, dynamic>> _members = [];
   bool _isLoading = true;
@@ -38,10 +43,28 @@ class _HomeScreenState extends State<HomeScreen> {
     if (user == null) return;
 
     try {
+      // --- 0. CHECK PROFILE (NEW) ---
+      // Ensure the user has a completed profile (name is required)
+      final profile = await Supabase.instance.client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      
+      if (profile == null || profile['full_name'] == null || (profile['full_name'] as String).isEmpty) {
+         if (mounted) {
+            // Redirect to Edit Profile and wait for completion
+            await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+            // Recursively call fetch data to re-verify after they return
+            _fetchData(); 
+            return;
+         }
+      }
+
       // --- 1. GET FAMILY ID & INFO ---
       final myMembership = await Supabase.instance.client
           .from('family_members')
-          .select('family_id, families(name, dp_url, invite_code)')
+          .select('family_id, role, families(name, dp_url, invite_code)')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -55,7 +78,10 @@ class _HomeScreenState extends State<HomeScreen> {
       
       _currentFamilyId = familyId;
       _familyName = familyData?['name'] ?? "My Family";
+      _familyDpUrl = familyData?['dp_url'] ?? "";
       _inviteCode = familyData?['invite_code'] ?? "";
+      _myRole = myMembership['role'] ?? 'member';
+      _isAdmin = _myRole == 'admin';
 
       // --- 2. FETCH GENERAL FOLDERS ---
       // This fetches folders where owner_id is NULL (The shared ones)
@@ -90,7 +116,16 @@ class _HomeScreenState extends State<HomeScreen> {
             .select('user_id, role, profiles(full_name, avatar_url)')
             .eq('family_id', familyId);
          
-         _members = List<Map<String, dynamic>>.from(membersData);
+         List<Map<String, dynamic>> rawMembers = List<Map<String, dynamic>>.from(membersData);
+         
+         // Normalize the data structure
+         for (var m in rawMembers) {
+           if (m['profiles'] != null) {
+             // If join worked, ensure top-level access if needed or just use 'profiles' map
+             // We'll keep it as is, but ensure UI reads from m['profiles']['full_name']
+           }
+         }
+         _members = rawMembers;
       } catch (joinError) {
          debugPrint("Join failed ($joinError). Falling back to manual fetch.");
          
@@ -114,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
            for (var m in rawMembers) {
              final profile = profiles.firstWhere((p) => p['id'] == m['user_id'], orElse: () => {});
              if (profile.isNotEmpty) {
-               m['profiles'] = profile; // Inject manually so UI code works the same
+               m['profiles'] = profile; 
              }
            }
          }
@@ -140,10 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // Re-paste them from your original file or previous working version.
   // For brevity I am including the critical Helper methods below:
 
-  void _copyFamilyId() {
-    Clipboard.setData(ClipboardData(text: _currentFamilyId));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Family ID Copied!"), backgroundColor: Colors.green));
-  }
+ 
 
   void _showInviteDialog() {
     if (_currentFamilyId.isEmpty) return;
@@ -183,9 +215,64 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleScan() async {
+    // Show quality selection dialog
+    ScanQuality selectedQuality = ScanQuality.medium; // Default
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Scan Quality'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Choose scan quality:'),
+              const SizedBox(height: 10),
+              RadioListTile<ScanQuality>(
+                title: const Text('High Quality (Best for important documents)'),
+                subtitle: const Text('Larger file size, best clarity'),
+                value: ScanQuality.high,
+                groupValue: selectedQuality,
+                onChanged: (value) => setState(() => selectedQuality = value!),
+              ),
+              RadioListTile<ScanQuality>(
+                title: const Text('Medium Quality (Balanced)'),
+                subtitle: const Text('Good quality, reasonable file size'),
+                value: ScanQuality.medium,
+                groupValue: selectedQuality,
+                onChanged: (value) => setState(() => selectedQuality = value!),
+              ),
+              RadioListTile<ScanQuality>(
+                title: const Text('Low Quality (Fast upload)'),
+                subtitle: const Text('Smaller file size, acceptable quality'),
+                value: ScanQuality.low,
+                groupValue: selectedQuality,
+                onChanged: (value) => setState(() => selectedQuality = value!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _performScan(selectedQuality);
+              },
+              child: const Text('Scan'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _performScan(ScanQuality quality) async {
     final scanner = SmartScannerService();
-    final result = await scanner.scanDocument();
-    if (result == null || result.pdf == null) return; 
+    final result = await scanner.scanDocument(quality: quality);
+    if (result == null || result.pdf == null) return;
     final scannedPdf = File(result.pdf!.uri);
     if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Processing Scan...")));
     await _showSaveDialog(scannedPdf);
@@ -267,6 +354,63 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showFamilyDpOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Family Picture Options', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Change Picture'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final picker = ImagePicker();
+                final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 1024);
+                if (picked == null) return;
+                final bytes = await picked.readAsBytes();
+                final ext = picked.name.split('.').last.toLowerCase();
+                try {
+                  final url = await FamilyService().updateFamilyDp(_currentFamilyId, bytes, ext);
+                  if (mounted) {
+                    setState(() => _familyDpUrl = url);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Family picture updated"), backgroundColor: Colors.green));
+                  }
+                } catch (e) {
+                  if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+                }
+              },
+            ),
+            if (_familyDpUrl.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Remove Picture', style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await FamilyService().deleteFamilyDp(_currentFamilyId);
+                    if (mounted) setState(() => _familyDpUrl = "");
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Family picture removed"), backgroundColor: Colors.green));
+                  } catch (e) {
+                    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+                  }
+                },
+              ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   IconData _getIcon(String iconName) {
     switch (iconName) {
       case 'home': return Icons.home;
@@ -277,11 +421,48 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      // backgroundColor: Colors.grey[50], // REMOVED: Let theme handle it
       appBar: AppBar(
+        toolbarHeight: 70, // Increase height for avatar
+        leadingWidth: 70,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16.0, top: 8, bottom: 8),
+          child: GestureDetector(
+            onTap: _showFamilyDpOptions,
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                shape: BoxShape.circle,
+              ),
+              child: _familyDpUrl.isNotEmpty
+                  ? ClipOval(
+                      child: Image.network(
+                        _familyDpUrl,
+                        key: ValueKey(_familyDpUrl),
+                        fit: BoxFit.cover,
+                        width: 40,
+                        height: 40,
+                        errorBuilder: (context, error, stackTrace) {
+                          debugPrint('Failed to load family DP: $error');
+                          // On error, clear the URL to show initial
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) setState(() => _familyDpUrl = "");
+                          });
+                          return Center(child: Text(_familyName.isNotEmpty ? _familyName[0].toUpperCase() : "F", style: TextStyle(color: Colors.blue[900], fontWeight: FontWeight.bold)));
+                        },
+                      ),
+                    )
+                  : Center(child: Text(_familyName.isNotEmpty ? _familyName[0].toUpperCase() : "F", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+            ),
+          ),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -293,24 +474,14 @@ class _HomeScreenState extends State<HomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_pin, color: Colors.white),
-            tooltip: "Edit Profile",
-            onPressed: () async {
-              final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-              if (result == true) _fetchData();
-            },
-          ),
-          // --- UPDATED REPAIR BUTTON ---
-          IconButton(
             icon: const Icon(Icons.build_circle, color: Colors.orange),
             tooltip: "Repair Dashboard",
             onPressed: () async {
-               // Force re-run of fetch logic which includes the auto-repair check
-               await _fetchData(); 
+               await _fetchData();
                if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dashboard Refreshed & Repaired")));
             },
           ),
-          IconButton(onPressed: _copyFamilyId, icon: const Icon(Icons.copy)),
+          // Removed Copy Icon
           IconButton(onPressed: _showInviteDialog, icon: const Icon(Icons.person_add_alt_1)),
           IconButton(onPressed: () => Supabase.instance.client.auth.signOut().then((_) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()))), icon: const Icon(Icons.logout)),
         ],
@@ -332,7 +503,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("🏠 General Documents", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const Text("🏠 General Documents", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     
                     if (_generalFolders.isEmpty)
@@ -355,7 +526,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     
                     const SizedBox(height: 30),
-                    const Text("👨‍👩‍👧‍👦 Family Members", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                    const Text("👨‍👩‍👧‍👦 Family Members", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     
                     if (_members.isEmpty)
@@ -390,7 +561,32 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold)),
                               subtitle: Text(member['role'].toString().toUpperCase()),
-                              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                              trailing: (_isAdmin && !isMe)
+                                  ? PopupMenuButton<String>(
+                                      onSelected: (value) async {
+                                        if (value == 'admin') {
+                                          await FamilyService().changeMemberRole(_currentFamilyId, member['user_id'], 'admin');
+                                        } else if (value == 'member') {
+                                          await FamilyService().changeMemberRole(_currentFamilyId, member['user_id'], 'member');
+                                        } else if (value == 'viewer') {
+                                          await FamilyService().changeMemberRole(_currentFamilyId, member['user_id'], 'viewer');
+                                        } else if (value == 'remove') {
+                                          await FamilyService().removeMember(_currentFamilyId, member['user_id']);
+                                        }
+                                        if (mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Updated"), backgroundColor: Colors.green));
+                                          _fetchData();
+                                        }
+                                      },
+                                      itemBuilder: (ctx) => const [
+                                        PopupMenuItem(value: 'admin', child: Text("Promote to Admin")),
+                                        PopupMenuItem(value: 'member', child: Text("Make Member")),
+                                        PopupMenuItem(value: 'viewer', child: Text("Make Viewer")),
+                                        PopupMenuDivider(),
+                                        PopupMenuItem(value: 'remove', child: Text("Remove Member")),
+                                      ],
+                                    )
+                                  : const Icon(Icons.arrow_forward_ios, size: 16),
                               onTap: () {
                                 Navigator.push(context, MaterialPageRoute(builder: (_) => MemberScreen(userId: member['user_id'], familyId: _currentFamilyId, isMe: isMe)));
                               },
@@ -409,7 +605,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return InkWell(
       onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FolderScreen(folderId: folderId, folderName: title))),
       child: Container(
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withOpacity(0.1))),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor, // Adaptive color
+          borderRadius: BorderRadius.circular(12), 
+          border: Border.all(color: Colors.blue.withOpacity(0.1)),
+          boxShadow: [
+             BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))
+          ]
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [

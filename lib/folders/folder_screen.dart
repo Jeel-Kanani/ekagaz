@@ -13,6 +13,7 @@ import 'package:open_filex/open_filex.dart';
 // ✅ Custom Imports
 import '../core/file_viewer_screen.dart';
 import '../core/pdf_service.dart';
+import '../core/smart_scanner_service.dart'; // Added import
 import '../core/share_service.dart';
 import '../core/notification_service.dart';
 import '../core/pdf_creator_service.dart'; 
@@ -274,7 +275,88 @@ class _FolderScreenState extends State<FolderScreen> {
     }
   }
 
-  // --- 7. UPLOAD LOGIC ---
+  // --- 7. UPLOAD & SCAN LOGIC ---
+  void _showUploadOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        height: 200,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Add Document", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            ListTile(
+              leading: const Icon(Icons.upload_file, color: Colors.blue),
+              title: const Text("Upload File"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _uploadFile();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.blue),
+              title: const Text("Scan Document"),
+              onTap: () {
+                Navigator.pop(ctx);
+                _scanDocument();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _scanDocument() async {
+    final scanner = SmartScannerService();
+    final result = await scanner.scanDocument();
+    if (result == null || result.pdf == null) return; 
+    
+    final scannedPdf = File(result.pdf!.uri);
+    final fileName = "Scan_${DateTime.now().hour}_${DateTime.now().minute}.pdf"; // Auto-name for now
+
+    setState(() => _isUploading = true);
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      final fileBytes = await scannedPdf.readAsBytes();
+      final storagePath = '${user.id}/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+      await Supabase.instance.client.storage
+          .from('documents')
+          .uploadBinary(storagePath, fileBytes);
+
+      final folderData = await Supabase.instance.client
+          .from('folders')
+          .select('family_id')
+          .eq('id', widget.folderId)
+          .single();
+      
+      await Supabase.instance.client.from('documents').insert({
+        'name': fileName,
+        'folder_id': widget.folderId,
+        'family_id': folderData['family_id'],
+        'file_path': storagePath,
+        'file_type': 'pdf',
+        'uploaded_by': user.id,
+        'is_deleted': false,
+      });
+
+      await _fetchDocuments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scan Saved Successfully!'), backgroundColor: Colors.green));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Scan upload failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
   Future<void> _uploadFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(withData: true);
     if (result == null || result.files.first.bytes == null) return;
@@ -597,27 +679,14 @@ class _FolderScreenState extends State<FolderScreen> {
                       )),
           ),
           
-          // ✅ UPLOAD BUTTON BAR
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.white,
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton.icon(
-                onPressed: _isUploading ? null : _uploadFile,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue[900],
-                  foregroundColor: Colors.white,
-                ),
-                icon: _isUploading 
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.upload_file),
-                label: Text(_isUploading ? "Uploading..." : "Upload Document"),
-              ),
-            ),
-          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showUploadOptions,
+        icon: const Icon(Icons.add),
+        label: const Text("Add Document"),
+        backgroundColor: Colors.blue[900],
+        foregroundColor: Colors.white,
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
+import 'dart:typed_data';
 
 class FamilyService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -56,6 +57,97 @@ class FamilyService {
     // Create both sets of folders immediately
     await createGeneralFolders(newFamilyId);
     await createPersonalFolders(user.id, newFamilyId);
+  }
+
+  Future<void> changeMemberRole(String familyId, String userId, String role) async {
+    await _client
+        .from('family_members')
+        .update({'role': role})
+        .eq('family_id', familyId)
+        .eq('user_id', userId);
+  }
+
+  Future<void> removeMember(String familyId, String userId) async {
+    await _client
+        .from('family_members')
+        .delete()
+        .eq('family_id', familyId)
+        .eq('user_id', userId);
+  }
+
+  Future<String> updateFamilyDp(String familyId, Uint8List bytes, String ext) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw "Not authenticated";
+
+    final path = 'family_dp/${familyId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    await _client.storage.from('family-avatars').uploadBinary(path, bytes);
+    final publicUrl = _client.storage.from('family-avatars').getPublicUrl(path);
+
+    // Use RPC function to update family DP (bypasses RLS)
+    final result = await _client.rpc('update_family_dp', params: {
+      'p_family_id': familyId,
+      'p_dp_url': publicUrl,
+      'p_user_id': user.id,
+    });
+
+    if (result == null) {
+      throw "Failed to update family DP";
+    }
+
+    return publicUrl;
+  }
+
+  Future<void> deleteFamilyDp(String familyId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw "Not authenticated";
+    await _client.from('families').update({'dp_url': null}).eq('id', familyId);
+  }
+
+  Future<void> migrateFamilyDpsToAvatarsBucket() async {
+    final user = _client.auth.currentUser;
+    if (user == null) throw "Not authenticated";
+
+    // Fetch families with dp_url containing 'documents/family_dp/'
+    final families = await _client
+        .from('families')
+        .select('id, dp_url')
+        .not('dp_url', 'is', null)
+        .like('dp_url', '%documents/family_dp/%');
+
+    for (final family in families) {
+      final familyId = family['id'] as String;
+      final oldUrl = family['dp_url'] as String;
+
+      // Extract the file path from the URL
+      final uri = Uri.parse(oldUrl);
+      final pathSegments = uri.pathSegments;
+      final filePath = pathSegments.sublist(pathSegments.indexOf('documents') + 1).join('/');
+
+      try {
+        // Download from old bucket
+        final bytes = await _client.storage.from('documents').download(filePath);
+
+        // Upload to new bucket
+        final fileName = 'family_${familyId}_${DateTime.now().millisecondsSinceEpoch}.jpg'; // Assume jpg for simplicity
+        await _client.storage.from('family-avatars').uploadBinary(
+          fileName,
+          bytes,
+          fileOptions: const FileOptions(upsert: true),
+        );
+
+        // Get new public URL
+        final newUrl = _client.storage.from('family-avatars').getPublicUrl(fileName);
+
+        // Update database
+        await _client.from('families').update({'dp_url': newUrl}).eq('id', familyId);
+
+        // Optionally delete from old bucket
+        await _client.storage.from('documents').remove([filePath]);
+      } catch (e) {
+        print('Failed to migrate DP for family $familyId: $e');
+        // Continue with next family
+      }
+    }
   }
 
   // 2. JOIN FAMILY

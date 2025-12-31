@@ -44,6 +44,7 @@ dependencies:
   google_mlkit_document_scanner: ^0.2.0
   google_mlkit_text_recognition: ^0.13.0
   image_cropper: ^11.0.0
+  image: ^4.1.7
 
   # Utilities
   flutter_local_notifications: ^17.0.0

@@ -40,8 +40,8 @@ class _FamilyAvatarUploaderState extends State<FamilyAvatarUploader> {
       final fileName = 'family_${widget.familyId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
       final bytes = await File(image.path).readAsBytes();
 
-      // Ensure you have a 'families' or 'avatars' bucket created in Supabase
-      const bucketName = 'avatars'; 
+      // Ensure you have a 'family-avatars' bucket created in Supabase
+      const bucketName = 'family-avatars';
       
       await Supabase.instance.client.storage
           .from(bucketName)

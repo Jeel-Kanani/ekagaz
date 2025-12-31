@@ -98,7 +98,6 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: TextField(
           controller: _searchController,
@@ -130,11 +129,11 @@ class _SearchScreenState extends State<SearchScreen> {
         children: [
           // --- FILTER BAR ---
           Container(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Row(
               children: [
-                const Text("Filter: ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                Text("Filter: ", style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyMedium?.color)),
                 const SizedBox(width: 10),
                 _buildFilterChip('All'),
                 const SizedBox(width: 8),
@@ -155,9 +154,9 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.manage_search, size: 80, color: Colors.grey[300]),
+                        Icon(Icons.manage_search, size: 80, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.15)),
                         const SizedBox(height: 10),
-                        Text("No documents found", style: TextStyle(color: Colors.grey[500])),
+                        Text("No documents found", style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7))),
                       ],
                     ),
                   )
@@ -169,7 +168,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       final isPdf = file['name'].toString().toLowerCase().endsWith('pdf');
                       
                       return ListTile(
-                        tileColor: Colors.white,
+                        tileColor: Theme.of(context).cardColor,
                         leading: CircleAvatar(
                           backgroundColor: isPdf ? Colors.red[50] : Colors.blue[50],
                           child: Icon(
@@ -181,9 +180,9 @@ class _SearchScreenState extends State<SearchScreen> {
                         title: Text(file['name'], style: const TextStyle(fontWeight: FontWeight.w600)),
                         subtitle: Text(
                           "Uploaded: ${file['created_at'].toString().split('T')[0]}",
-                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          style: TextStyle(fontSize: 12, color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7)),
                         ),
-                        trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                        trailing: Icon(Icons.chevron_right, color: Theme.of(context).iconTheme.color),
                         onTap: () => _openFile(file),
                       );
                     },
