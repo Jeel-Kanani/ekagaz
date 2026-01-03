@@ -22,7 +22,7 @@ class SmartScannerService {
       final result = await scanner.scanDocument();
 
       // Apply quality settings if result contains images
-      if (result != null && result.images.isNotEmpty) {
+      if (result.images.isNotEmpty) {
         return await _processScannedImages(result, quality);
       }
 

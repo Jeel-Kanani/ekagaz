@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:dio/dio.dart'; 
-import 'package:path_provider/path_provider.dart'; 
-import 'package:permission_handler/permission_handler.dart'; 
-import 'package:gal/gal.dart'; 
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:gal/gal.dart';
 import 'package:open_filex/open_filex.dart';
 
 // ✅ Custom Imports
@@ -16,7 +16,8 @@ import '../core/pdf_service.dart';
 import '../core/smart_scanner_service.dart'; // Added import
 import '../core/share_service.dart';
 import '../core/notification_service.dart';
-import '../core/pdf_creator_service.dart'; 
+import '../core/pdf_creator_service.dart';
+import '../core/local_db_service.dart'; // Added for offline storage
 import '../debug/documents_debug_screen.dart';
 import 'trash_screen.dart';
 
@@ -58,16 +59,22 @@ class _FolderScreenState extends State<FolderScreen> {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
     if (!mounted) return;
-    
+
     setState(() => _isLoading = true);
 
-    try {
-      // 1. Start Builder
-      var builder = Supabase.instance.client.from('documents').select();
+    // 1. LOAD LOCAL DATA IMMEDIATELY
+    final localDocs = await LocalDBService().getDocuments(widget.folderId);
+    if (mounted && localDocs.isNotEmpty) {
+      setState(() {
+        _files = List<Map<String, dynamic>>.from(localDocs);
+        _isLoading = false;
+      });
+    }
 
-      // 2. ✅ APPLY FILTERS FIRST
-      // IMPORTANT: You CANNOT call .eq() after .order()
-      builder = builder.eq('is_deleted', false); 
+    // 2. FETCH FROM SERVER (Network Check)
+    try {
+      var builder = Supabase.instance.client.from('documents').select();
+      builder = builder.eq('is_deleted', false);
       builder = builder.eq('folder_id', widget.folderId);
 
       // Optional: apply search filter
@@ -79,10 +86,13 @@ class _FolderScreenState extends State<FolderScreen> {
           // If the builder doesn't support .or or the format, ignore search
         }
       }
-      
-      // 3. ✅ APPLY SORT LAST
+
       final data = await builder.order('created_at', ascending: false);
 
+      // 3. UPDATE LOCAL CACHE
+      await LocalDBService().cacheDocuments(List<Map<String, dynamic>>.from(data));
+
+      // 4. UPDATE UI
       if (mounted) {
         setState(() {
           _files = List<Map<String, dynamic>>.from(data);
@@ -90,9 +100,9 @@ class _FolderScreenState extends State<FolderScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      // If offline or error, we still have local data shown!
+      if (mounted && _files.isEmpty) {
         setState(() => _isLoading = false);
-        // print("Error loading docs: $e");
       }
     }
   }

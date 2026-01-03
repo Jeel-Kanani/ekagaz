@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'core/constants/supabase_config.dart';
 import 'core/theme_service.dart';
+import 'core/sync_service.dart';
 
 // --- IMPORTS FOR YOUR SCREENS ---
 import 'auth/login_screen.dart';
@@ -19,6 +20,9 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  // Initialize sync service
+  await SyncService().init();
 
   runApp(
     // ✅ WRAP APP IN MultiProvider (Theme + Profile cache)

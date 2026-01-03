@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/login_screen.dart';
 import 'folder_screen.dart';
 import 'member_screen.dart';
@@ -8,10 +9,11 @@ import '../core/smart_scanner_service.dart';
 import 'package:image/image.dart' as img;
 import '../family/family_service.dart';
 import '../family/family_setup_screen.dart';
-import '../profile/edit_profile_screen.dart'; 
+import '../profile/edit_profile_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
+import '../core/local_db_service.dart';
  
 
 class HomeScreen extends StatefulWidget {
@@ -42,131 +44,112 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    try {
-      // --- 0. CHECK PROFILE (NEW) ---
-      // Ensure the user has a completed profile (name is required)
-      final profile = await Supabase.instance.client
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .maybeSingle();
-      
-      if (profile == null || profile['full_name'] == null || (profile['full_name'] as String).isEmpty) {
-         if (mounted) {
-            // Redirect to Edit Profile and wait for completion
-            await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-            // Recursively call fetch data to re-verify after they return
-            _fetchData(); 
-            return;
-         }
-      }
+    final prefs = await SharedPreferences.getInstance();
 
-      // --- 1. GET FAMILY ID & INFO ---
+    try {
+      // --- TRY ONLINE FETCH ---
+
+      // 1. Get Membership & Family Info
       final myMembership = await Supabase.instance.client
           .from('family_members')
           .select('family_id, role, families(name, dp_url, invite_code)')
           .eq('user_id', user.id)
           .maybeSingle();
 
-      if (myMembership == null) {
-        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const FamilySetupScreen()));
-        return;
-      }
+      if (myMembership != null) {
+        final familyId = myMembership['family_id'];
+        final familyData = myMembership['families'];
 
-      final familyId = myMembership['family_id'];
-      final familyData = myMembership['families'];
-      
-      _currentFamilyId = familyId;
-      _familyName = familyData?['name'] ?? "My Family";
-      _familyDpUrl = familyData?['dp_url'] ?? "";
-      _inviteCode = familyData?['invite_code'] ?? "";
-      _myRole = myMembership['role'] ?? 'member';
-      _isAdmin = _myRole == 'admin';
+        // 2. CACHE IDENTITY (Fixes "Not Member" offline)
+        await prefs.setString('cached_family_id', familyId);
+        await prefs.setString('cached_family_name', familyData?['name'] ?? "My Family");
+        await prefs.setString('cached_role', myMembership['role'] ?? 'member');
+        await prefs.setString('cached_invite_code', familyData?['invite_code'] ?? "");
 
-      // --- 2. FETCH GENERAL FOLDERS ---
-      // This fetches folders where owner_id is NULL (The shared ones)
-      final generalData = await Supabase.instance.client
-          .from('folders')
-          .select()
-          .eq('family_id', familyId)
-          .filter('owner_id', 'is', null) 
-          .order('created_at');
-      
-      _generalFolders = List<Map<String, dynamic>>.from(generalData);
+        // 3. Update UI
+        setState(() {
+          _currentFamilyId = familyId;
+          _familyName = familyData?['name'] ?? "My Family";
+          _familyDpUrl = familyData?['dp_url'] ?? "";
+          _inviteCode = familyData?['invite_code'] ?? "";
+          _myRole = myMembership['role'] ?? 'member';
+          _isAdmin = _myRole == 'admin';
+        });
 
-      // --- 3. AUTO-REPAIR GENERAL FOLDERS IF EMPTY ---
-      if (_generalFolders.isEmpty) {
-        debugPrint("General folders missing. Attempting auto-creation...");
-        await FamilyService().createGeneralFolders(familyId);
-        // Fetch again immediately
-        final retryData = await Supabase.instance.client
+        // 4. Fetch & Cache General Folders
+        final generalData = await Supabase.instance.client
             .from('folders')
             .select()
             .eq('family_id', familyId)
-            .filter('owner_id', 'is', null);
-        _generalFolders = List<Map<String, dynamic>>.from(retryData);
-      }
+            .filter('owner_id', 'is', null)
+            .order('created_at');
 
-      // --- 4. SAFE MEMBER FETCH ---
-      // We try the complex join first. If it fails (RLS/Foreign Key issue), we fallback to basic fetch.
-      try {
-         // Attempt Join: family_members + profiles
-         final membersData = await Supabase.instance.client
+        // Save to SQLite (Fixes "Cant fetch folder" offline)
+        await LocalDBService().cacheFolders(List<Map<String, dynamic>>.from(generalData));
+
+        // --- FETCH & CACHE FAMILY MEMBERS ---
+        final membersData = await Supabase.instance.client
             .from('family_members')
             .select('user_id, role, profiles(full_name, avatar_url)')
             .eq('family_id', familyId);
-         
-         List<Map<String, dynamic>> rawMembers = List<Map<String, dynamic>>.from(membersData);
-         
-         // Normalize the data structure
-         for (var m in rawMembers) {
-           if (m['profiles'] != null) {
-             // If join worked, ensure top-level access if needed or just use 'profiles' map
-             // We'll keep it as is, but ensure UI reads from m['profiles']['full_name']
-           }
-         }
-         _members = rawMembers;
-      } catch (joinError) {
-         debugPrint("Join failed ($joinError). Falling back to manual fetch.");
-         
-         // Fallback: Get members, then get profiles manually
-         final basicMembers = await Supabase.instance.client
-            .from('family_members')
-            .select('user_id, role')
-            .eq('family_id', familyId);
-            
-         List<Map<String, dynamic>> rawMembers = List<Map<String, dynamic>>.from(basicMembers);
-         
-         // If we have members, try to fetch their profiles separately
-         if (rawMembers.isNotEmpty) {
-           final userIds = rawMembers.map((m) => m['user_id']).toList();
-           final profiles = await Supabase.instance.client
-              .from('profiles')
-              .select('id, full_name, avatar_url')
-              .inFilter('id', userIds);
-              
-           // Manually merge profile data into member data
-           for (var m in rawMembers) {
-             final profile = profiles.firstWhere((p) => p['id'] == m['user_id'], orElse: () => {});
-             if (profile.isNotEmpty) {
-               m['profiles'] = profile; 
-             }
-           }
-         }
-         _members = rawMembers;
-      }
 
-      if (mounted) {
-        setState(() => _isLoading = false);
+        debugPrint("Fetched ${membersData.length} family members online");
+
+        // Cache family members to SQLite
+        await LocalDBService().cacheFamilyMembers(List<Map<String, dynamic>>.from(membersData), familyId);
+
+        if (mounted) {
+          setState(() {
+            _generalFolders = List<Map<String, dynamic>>.from(generalData);
+            _members = List<Map<String, dynamic>>.from(membersData);
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
-      debugPrint("Critical Dashboard Error: $e");
-      if (mounted) {
+      // --- OFFLINE MODE (FALLBACK) ---
+      debugPrint("Offline Error: $e");
+
+      // 1. Restore Identity from Cache
+      final cachedFamilyId = prefs.getString('cached_family_id');
+      final cachedName = prefs.getString('cached_family_name');
+
+      if (cachedFamilyId != null && mounted) {
         setState(() {
-          _isLoading = false;
-          _familyName = "Connection Error";
+          _currentFamilyId = cachedFamilyId;
+          _familyName = cachedName ?? "Offline Family";
+          _myRole = prefs.getString('cached_role') ?? 'member';
+          _inviteCode = prefs.getString('cached_invite_code') ?? "";
+          _isAdmin = _myRole == 'admin';
         });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+
+        // 2. Load Folders and Members from SQLite
+        final localFolders = await LocalDBService().getFolders(cachedFamilyId);
+        final localMembers = await LocalDBService().getFamilyMembers(cachedFamilyId);
+
+        debugPrint("Loaded ${localFolders.length} folders and ${localMembers.length} members from local DB");
+
+        setState(() {
+          _generalFolders = localFolders;
+          _members = localMembers;
+          _isLoading = false;
+        });
+
+        // Show "Offline" message instead of Red Screen
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("You are offline. Viewing saved data."),
+            backgroundColor: Colors.grey
+          )
+        );
+      } else {
+        // Only show error if we have NO cached data at all
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _familyName = "Offline (No Data)";
+          });
+        }
       }
     }
   }
@@ -437,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: Colors.white24,
                 shape: BoxShape.circle,
               ),
