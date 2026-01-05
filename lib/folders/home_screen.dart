@@ -13,8 +13,9 @@ import '../profile/edit_profile_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
-import '../core/local_db_service.dart';
- 
+import '../core/export_service.dart';
+import '../core/doc_category.dart';
+import '../core/loading_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,12 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
 
-    final prefs = await SharedPreferences.getInstance();
-
     try {
-      // --- TRY ONLINE FETCH ---
-
-      // 1. Get Membership & Family Info
+      // Get Membership & Family Info
       final myMembership = await Supabase.instance.client
           .from('family_members')
           .select('family_id, role, families(name, dp_url, invite_code)')
@@ -60,13 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final familyId = myMembership['family_id'];
         final familyData = myMembership['families'];
 
-        // 2. CACHE IDENTITY (Fixes "Not Member" offline)
-        await prefs.setString('cached_family_id', familyId);
-        await prefs.setString('cached_family_name', familyData?['name'] ?? "My Family");
-        await prefs.setString('cached_role', myMembership['role'] ?? 'member');
-        await prefs.setString('cached_invite_code', familyData?['invite_code'] ?? "");
-
-        // 3. Update UI
+        // Update UI
         setState(() {
           _currentFamilyId = familyId;
           _familyName = familyData?['name'] ?? "My Family";
@@ -76,7 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _isAdmin = _myRole == 'admin';
         });
 
-        // 4. Fetch & Cache General Folders
+        // Fetch General Folders
         final generalData = await Supabase.instance.client
             .from('folders')
             .select()
@@ -84,19 +75,13 @@ class _HomeScreenState extends State<HomeScreen> {
             .filter('owner_id', 'is', null)
             .order('created_at');
 
-        // Save to SQLite (Fixes "Cant fetch folder" offline)
-        await LocalDBService().cacheFolders(List<Map<String, dynamic>>.from(generalData));
-
-        // --- FETCH & CACHE FAMILY MEMBERS ---
+        // Fetch Family Members
         final membersData = await Supabase.instance.client
             .from('family_members')
             .select('user_id, role, profiles(full_name, avatar_url)')
             .eq('family_id', familyId);
 
-        debugPrint("Fetched ${membersData.length} family members online");
-
-        // Cache family members to SQLite
-        await LocalDBService().cacheFamilyMembers(List<Map<String, dynamic>>.from(membersData), familyId);
+        debugPrint("Fetched ${membersData.length} family members");
 
         if (mounted) {
           setState(() {
@@ -107,49 +92,14 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     } catch (e) {
-      // --- OFFLINE MODE (FALLBACK) ---
-      debugPrint("Offline Error: $e");
-
-      // 1. Restore Identity from Cache
-      final cachedFamilyId = prefs.getString('cached_family_id');
-      final cachedName = prefs.getString('cached_family_name');
-
-      if (cachedFamilyId != null && mounted) {
+      debugPrint("Error fetching data: $e");
+      if (mounted) {
         setState(() {
-          _currentFamilyId = cachedFamilyId;
-          _familyName = cachedName ?? "Offline Family";
-          _myRole = prefs.getString('cached_role') ?? 'member';
-          _inviteCode = prefs.getString('cached_invite_code') ?? "";
-          _isAdmin = _myRole == 'admin';
-        });
-
-        // 2. Load Folders and Members from SQLite
-        final localFolders = await LocalDBService().getFolders(cachedFamilyId);
-        final localMembers = await LocalDBService().getFamilyMembers(cachedFamilyId);
-
-        debugPrint("Loaded ${localFolders.length} folders and ${localMembers.length} members from local DB");
-
-        setState(() {
-          _generalFolders = localFolders;
-          _members = localMembers;
           _isLoading = false;
         });
-
-        // Show "Offline" message instead of Red Screen
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("You are offline. Viewing saved data."),
-            backgroundColor: Colors.grey
-          )
+          SnackBar(content: Text("Error loading data: $e"))
         );
-      } else {
-        // Only show error if we have NO cached data at all
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _familyName = "Offline (No Data)";
-          });
-        }
       }
     }
   }
@@ -404,7 +354,49 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _showExportDialog() async {
+    final exportService = ExportService();
+    try {
+      final result = await exportService.exportAllToDevice(context, _currentFamilyId);
+      if (result != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Export completed successfully!"), backgroundColor: Colors.green),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Export failed or cancelled"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Export failed: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
+  Future<void> _backupToGoogleDrive() async {
+    final exportService = ExportService();
+    try {
+      final success = await exportService.backupToGoogleDrive(context, _currentFamilyId);
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Backup to Google Drive completed successfully!"), backgroundColor: Colors.green),
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Backup failed or cancelled"), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Backup failed: $e"), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -456,17 +448,69 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.blue[900],
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.build_circle, color: Colors.orange),
-            tooltip: "Repair Dashboard",
-            onPressed: () async {
-               await _fetchData();
-               if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Dashboard Refreshed & Repaired")));
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              switch (value) {
+                case 'export_device':
+                  _showExportDialog();
+                  break;
+                case 'backup_drive':
+                  _backupToGoogleDrive();
+                  break;
+                case 'invite':
+                  _showInviteDialog();
+                  break;
+                case 'logout':
+                  Supabase.instance.client.auth.signOut().then((_) =>
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())));
+                  break;
+              }
             },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'export_device',
+                child: Row(
+                  children: [
+                    Icon(Icons.download, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Export to Device'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'backup_drive',
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_upload, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Backup to Google Drive'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(
+                value: 'invite',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add_alt_1),
+                    SizedBox(width: 8),
+                    Text('Invite Member'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout),
+                    SizedBox(width: 8),
+                    Text('Logout'),
+                  ],
+                ),
+              ),
+            ],
           ),
-          // Removed Copy Icon
-          IconButton(onPressed: _showInviteDialog, icon: const Icon(Icons.person_add_alt_1)),
-          IconButton(onPressed: () => Supabase.instance.client.auth.signOut().then((_) => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()))), icon: const Icon(Icons.logout)),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -586,7 +630,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildFolderCard(String title, String iconString, String folderId) {
     return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FolderScreen(folderId: folderId, folderName: title))),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FolderScreen(
+            folderId: folderId,
+            folderName: title,
+            zone: DocCategoryType.household,
+          ),
+        ),
+      ),
       child: Container(
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor, // Adaptive color

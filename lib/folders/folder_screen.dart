@@ -18,17 +18,22 @@ import '../core/share_service.dart';
 import '../core/notification_service.dart';
 import '../core/pdf_creator_service.dart';
 import '../core/local_db_service.dart'; // Added for offline storage
+import '../core/audit_service.dart';
+import '../core/loading_widget.dart';
+import '../core/doc_category.dart';
 import '../debug/documents_debug_screen.dart';
 import 'trash_screen.dart';
 
 class FolderScreen extends StatefulWidget {
   final String folderId;
   final String folderName;
+  final DocCategoryType? zone;
 
   const FolderScreen({
     super.key,
     required this.folderId,
     required this.folderName,
+    this.zone,
   });
 
   @override
@@ -39,6 +44,7 @@ class _FolderScreenState extends State<FolderScreen> {
   bool _isUploading = false;
   bool _isDownloading = false;
   bool _isLoading = true;
+  bool _isAdmin = false;
   
   // ✅ SEARCH STATE
   bool _isSearching = false;
@@ -47,12 +53,47 @@ class _FolderScreenState extends State<FolderScreen> {
 
   List<Map<String, dynamic>> _files = [];
 
+  DocCategoryType get _effectiveZone =>
+      widget.zone ?? DocCategoryType.household;
+
   @override
   void initState() {
     super.initState();
+    _checkAdminStatus();
     _fetchDocuments();
     NotificationService.init();
     NotificationService.requestPermissions();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Get family_id from folder
+      final folderData = await Supabase.instance.client
+          .from('folders')
+          .select('family_id')
+          .eq('id', widget.folderId)
+          .maybeSingle();
+
+      if (folderData == null) return;
+
+      final member = await Supabase.instance.client
+          .from('family_members')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('family_id', folderData['family_id'])
+          .maybeSingle();
+
+      if (mounted) {
+        setState(() {
+          _isAdmin = member?['role'] == 'admin';
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking admin status: $e');
+    }
   }
 
   Future<void> _fetchDocuments() async {
@@ -105,6 +146,47 @@ class _FolderScreenState extends State<FolderScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  /// Let user pick a document category based on the current zone.
+  Future<String?> _pickCategoryId() async {
+    List<DocCategory> options;
+    switch (_effectiveZone) {
+      case DocCategoryType.household:
+        options = householdCategories().toList();
+        break;
+      case DocCategoryType.memberProfile:
+        options = memberProfileCategories().toList();
+        break;
+      case DocCategoryType.personalPrivate:
+        options = personalCategories().toList();
+        break;
+    }
+
+    if (!mounted || options.isEmpty) return null;
+
+    return showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Choose Category',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+            for (final c in options)
+              ListTile(
+                leading: Icon(c.icon),
+                title: Text(c.displayName),
+                onTap: () => Navigator.pop(ctx, c.id),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   // --- 1. VIEW FILE ---
@@ -270,11 +352,38 @@ class _FolderScreenState extends State<FolderScreen> {
 
   // --- UPDATED SOFT DELETE ---
   Future<void> _deleteFile(String fileId) async {
+    // Check admin-only delete rule
+    if (!_isAdmin) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Only admins can delete documents"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     try {
+      final doc = await Supabase.instance.client
+          .from('documents')
+          .select('name')
+          .eq('id', fileId)
+          .single();
+
       await Supabase.instance.client
           .from('documents')
           .update({'is_deleted': true})
           .eq('id', fileId);
+
+      // Log audit action
+      await AuditService().logAction(
+        actionType: 'delete',
+        entityType: 'document',
+        entityId: fileId,
+        entityName: doc['name'],
+      );
 
       _fetchDocuments(); // Reload the list to hide the deleted item
       if(mounted) {
@@ -327,6 +436,9 @@ class _FolderScreenState extends State<FolderScreen> {
     final scannedPdf = File(result.pdf!.uri);
     final fileName = "Scan_${DateTime.now().hour}_${DateTime.now().minute}.pdf"; // Auto-name for now
 
+    final selectedCategoryId = await _pickCategoryId();
+    if (selectedCategoryId == null) return;
+
     setState(() => _isUploading = true);
 
     try {
@@ -354,6 +466,7 @@ class _FolderScreenState extends State<FolderScreen> {
         'file_type': 'pdf',
         'uploaded_by': user.id,
         'is_deleted': false,
+        'category_id': selectedCategoryId,
       });
 
       await _fetchDocuments();
@@ -370,6 +483,9 @@ class _FolderScreenState extends State<FolderScreen> {
   Future<void> _uploadFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(withData: true);
     if (result == null || result.files.first.bytes == null) return;
+
+    final selectedCategoryId = await _pickCategoryId();
+    if (selectedCategoryId == null) return;
 
     setState(() => _isUploading = true);
     final fileBytes = result.files.first.bytes;
@@ -403,6 +519,7 @@ class _FolderScreenState extends State<FolderScreen> {
         'file_type': result.files.first.extension ?? 'file',
         'uploaded_by': user.id,
         'is_deleted': false, // ✅ Explicitly Active
+        'category_id': selectedCategoryId,
       });
 
       await _fetchDocuments();
@@ -507,6 +624,9 @@ class _FolderScreenState extends State<FolderScreen> {
   }
 
   Future<void> _savePdf(File file, String fileName, String folderId) async {
+    final selectedCategoryId = await _pickCategoryId();
+    if (selectedCategoryId == null) return;
+
     setState(() => _isUploading = true);
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -531,6 +651,7 @@ class _FolderScreenState extends State<FolderScreen> {
         'file_type': 'pdf',
         'uploaded_by': user.id,
         'is_deleted': false,
+        'category_id': selectedCategoryId,
       }).select();
       
       final insertedRows = List<Map<String, dynamic>>.from(inserted);
@@ -616,17 +737,12 @@ class _FolderScreenState extends State<FolderScreen> {
 
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const LoadingWidget(message: "Loading documents...")
                 : (_files.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.folder_open, size: 80, color: Colors.grey[300]),
-                            const SizedBox(height: 16),
-                            Text("No files found", style: TextStyle(color: Colors.grey[500])),
-                          ],
-                        ),
+                    ? const EmptyStateWidget(
+                        icon: Icons.folder_open,
+                        message: "No files found",
+                        subtitle: "Add documents to get started",
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.all(12),
@@ -679,7 +795,7 @@ class _FolderScreenState extends State<FolderScreen> {
                                   ])),
                                   const PopupMenuDivider(),
                                   const PopupMenuItem(value: 'rename', child: Row(children: [Icon(Icons.edit, color: Colors.orange), SizedBox(width: 8), Text("Rename")])),
-                                  const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, color: Colors.red), SizedBox(width: 8), Text("Delete (Trash)")])),
+                                  if (_isAdmin) const PopupMenuItem(value: 'delete', child: Row(children: [Icon(Icons.delete, color: Colors.red), SizedBox(width: 8), Text("Delete (Trash)")])),
                                 ],
                               ),
                               onTap: () => _openFile(file['file_path'], file['name']),

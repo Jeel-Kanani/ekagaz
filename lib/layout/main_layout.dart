@@ -5,6 +5,7 @@ import '../settings/settings_screen.dart';
 import 'dart:async';
 import 'package:app_links/app_links.dart';
 import '../family/join_family_screen.dart';
+import '../core/sync_status_widget.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -76,9 +77,16 @@ class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack( // Using IndexedStack preserves state of screens when switching tabs
-        index: _currentIndex,
-        children: _screens,
+      body: Column(
+        children: [
+          const SyncStatusWidget(),
+          Expanded(
+            child: IndexedStack( // Using IndexedStack preserves state of screens when switching tabs
+              index: _currentIndex,
+              children: _screens,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,

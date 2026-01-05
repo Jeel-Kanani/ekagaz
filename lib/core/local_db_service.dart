@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'dart:convert';
 
 class LocalDBService {
   static final LocalDBService _instance = LocalDBService._internal();
@@ -20,7 +21,7 @@ class LocalDBService {
 
     return await openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         // Table for Folders
         await db.execute('''
@@ -29,7 +30,8 @@ class LocalDBService {
             name TEXT,
             icon TEXT,
             family_id TEXT,
-            owner_id TEXT
+            owner_id TEXT,
+            version INTEGER DEFAULT 1
           )
         ''');
 
@@ -42,7 +44,8 @@ class LocalDBService {
             file_path TEXT,
             file_type TEXT,
             created_at TEXT,
-            is_deleted INTEGER
+            is_deleted INTEGER,
+            version INTEGER DEFAULT 1
           )
         ''');
 
@@ -55,6 +58,19 @@ class LocalDBService {
             full_name TEXT,
             avatar_url TEXT,
             PRIMARY KEY (user_id, family_id)
+          )
+        ''');
+
+        // Table for Sync Queue (offline actions)
+        await db.execute('''
+          CREATE TABLE sync_queue(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action_type TEXT,
+            entity_type TEXT,
+            entity_id TEXT,
+            data TEXT,
+            created_at TEXT,
+            status TEXT
           )
         ''');
       },
@@ -71,6 +87,23 @@ class LocalDBService {
               PRIMARY KEY (user_id, family_id)
             )
           ''');
+        }
+        if (oldVersion < 3) {
+          // Add sync_queue table for version 3
+          await db.execute('''
+            CREATE TABLE sync_queue(
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              action_type TEXT,
+              entity_type TEXT,
+              entity_id TEXT,
+              data TEXT,
+              created_at TEXT,
+              status TEXT
+            )
+          ''');
+          // Add version column to documents and folders
+          await db.execute('ALTER TABLE documents ADD COLUMN version INTEGER DEFAULT 1');
+          await db.execute('ALTER TABLE folders ADD COLUMN version INTEGER DEFAULT 1');
         }
       },
     );
@@ -185,5 +218,65 @@ class LocalDBService {
       };
       return map;
     }).toList();
+  }
+
+  // --- 4. SYNC QUEUE METHODS ---
+  Future<void> addSyncAction({
+    required String actionType, // 'create', 'update', 'delete'
+    required String entityType, // 'document', 'folder'
+    required String entityId,
+    required Map<String, dynamic> data,
+  }) async {
+    final db = await database;
+    await db.insert(
+      'sync_queue',
+      {
+        'action_type': actionType,
+        'entity_type': entityType,
+        'entity_id': entityId,
+        'data': jsonEncode(data), // Store as JSON string
+        'created_at': DateTime.now().toIso8601String(),
+        'status': 'pending',
+      },
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingSyncActions() async {
+    final db = await database;
+    return await db.query(
+      'sync_queue',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+      orderBy: 'created_at ASC',
+    );
+  }
+
+  Future<void> markSyncActionComplete(int queueId) async {
+    final db = await database;
+    await db.update(
+      'sync_queue',
+      {'status': 'completed'},
+      where: 'id = ?',
+      whereArgs: [queueId],
+    );
+  }
+
+  Future<void> markSyncActionFailed(int queueId, String error) async {
+    final db = await database;
+    await db.update(
+      'sync_queue',
+      {'status': 'failed', 'data': error},
+      where: 'id = ?',
+      whereArgs: [queueId],
+    );
+  }
+
+  Future<void> clearCompletedSyncActions() async {
+    final db = await database;
+    await db.delete(
+      'sync_queue',
+      where: 'status = ? AND created_at < ?',
+      whereArgs: ['completed', DateTime.now().subtract(const Duration(days: 7)).toIso8601String()],
+    );
   }
 }

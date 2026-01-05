@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'core/constants/supabase_config.dart';
 import 'core/theme_service.dart';
 import 'core/sync_service.dart';
+import 'core/sync_status_widget.dart';
 
 // --- IMPORTS FOR YOUR SCREENS ---
 import 'auth/login_screen.dart';
@@ -25,11 +26,12 @@ Future<void> main() async {
   await SyncService().init();
 
   runApp(
-    // ✅ WRAP APP IN MultiProvider (Theme + Profile cache)
+    // ✅ WRAP APP IN MultiProvider (Theme + Profile cache + Sync Status)
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeService()),
         ChangeNotifierProvider(create: (_) => ProfileProvider()..loadProfile()),
+        ChangeNotifierProvider(create: (_) => SyncStatusProvider()),
       ],
       child: const MyApp(),
     ),

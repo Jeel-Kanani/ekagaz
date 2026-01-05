@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/doc_category.dart';
 import 'folder_screen.dart';
 
 class MemberScreen extends StatefulWidget {
@@ -75,7 +76,16 @@ class _MemberScreenState extends State<MemberScreen> {
               itemBuilder: (ctx, i) {
                 final f = _personalFolders[i];
                 return InkWell(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => FolderScreen(folderId: f['id'], folderName: f['name']))),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FolderScreen(
+                        folderId: f['id'],
+                        folderName: f['name'],
+                        zone: DocCategoryType.memberProfile,
+                      ),
+                    ),
+                  ),
                   child: Card(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
